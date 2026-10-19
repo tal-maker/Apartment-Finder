@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>מוצא דירות ת״א</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>🏠 מוצא דירות ת״א</h1>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="listings">דירות</button>
+      <button class="tab" data-tab="searches">חיפושים והתראות</button>
+      <button class="tab" data-tab="sources">מקורות והגדרות</button>
+    </nav>
+    <div class="scan-status">
+      <span id="scan-info"></span>
+      <button id="scan-now" class="btn small">סרוק עכשיו</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="tab-listings" class="tab-panel active">
+      <aside class="filters-panel">
+        <div class="panel-head">
+          <h2>סינון</h2>
+          <button id="toggle-filters" class="btn small ghost mobile-only">הצג/הסתר</button>
+        </div>
+        <form id="listing-filters" class="filter-form"></form>
+        <div class="filter-actions">
+          <button id="apply-filters" class="btn primary">הצג תוצאות</button>
+          <button id="reset-filters" class="btn ghost">איפוס</button>
+          <button id="save-search" class="btn">💾 שמור כחיפוש עם התראות</button>
+        </div>
+      </aside>
+      <div class="results">
+        <div class="results-bar">
+          <select id="view-select" aria-label="תצוגה">
+            <option value="all">כל הדירות</option>
+            <option value="favorite">⭐ מועדפים</option>
+            <option value="hidden">🙈 מוסתרים</option>
+          </select>
+          <select id="sort-select" aria-label="מיון">
+            <option value="new">החדשות ביותר</option>
+            <option value="price_asc">מחיר: מהזול</option>
+            <option value="price_desc">מחיר: מהיקר</option>
+          </select>
+          <span id="results-count" class="muted"></span>
+        </div>
+        <div id="listings" class="cards"></div>
+      </div>
+    </section>
+
+    <section id="tab-searches" class="tab-panel">
+      <div class="section-head">
+        <h2>חיפושים שמורים</h2>
+        <button id="new-search" class="btn primary">+ חיפוש חדש</button>
+      </div>
+      <p class="muted">כל חיפוש פעיל נבדק בכל סריקה (כל <span class="interval"></span> דקות). דירה חדשה שמתאימה לו תשלח אליכם בוואטסאפ.</p>
+      <div id="searches"></div>
+    </section>
+
+    <section id="tab-sources" class="tab-panel">
+      <div class="grid-2">
+        <div class="card-box">
+          <h2>מקורות</h2>
+          <form id="sources-form">
+            <fieldset>
+              <legend><label><input type="checkbox" name="yad2"> יד2</label></legend>
+              <p class="muted">דירות להשכרה בתל אביב-יפו, 2 העמודים האחרונים בכל סריקה.</p>
+            </fieldset>
+            <fieldset>
+              <legend><label><input type="checkbox" name="telegram"> טלגרם</label></legend>
+              <p class="muted" id="telegram-mode"></p>
+              <label class="block">ערוצים / קבוצות (שורה לכל אחד: שם משתמש או קישור t.me)
+                <textarea name="telegramChats" rows="4" placeholder="https://t.me/example_channel"></textarea>
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend><label><input type="checkbox" name="facebook"> קבוצות פייסבוק</label></legend>
+              <p class="muted" id="facebook-mode"></p>
+              <label class="block">קישורים לקבוצות (שורה לכל קבוצה)
+                <textarea name="facebookGroups" rows="4" placeholder="https://www.facebook.com/groups/123456789"></textarea>
+              </label>
+            </fieldset>
+            <button class="btn primary" type="submit">שמור מקורות</button>
+            <span id="sources-saved" class="muted"></span>
+          </form>
+        </div>
+        <div class="card-box">
+          <h2>סטטוס</h2>
+          <ul id="status-list" class="status-list"></ul>
+          <h3>סריקות אחרונות</h3>
+          <div class="table-wrap"><table id="runs"><thead><tr><th>מקור</th><th>זמן</th><th>נמצאו</th><th>חדשות</th><th>הערות</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="search-dialog">
+    <form method="dialog" id="search-dialog-form">
+      <h2 id="search-dialog-title">חיפוש חדש</h2>
+      <label class="block">שם החיפוש <input name="name" required placeholder="למשל: 3 חדרים בצפון עד 8,000"></label>
+      <div class="row">
+        <label><input type="checkbox" name="notify" checked> שלח התראות וואטסאפ</label>
+        <label><input type="checkbox" name="active" checked> פעיל</label>
+      </div>
+      <div id="search-dialog-filters" class="filter-form"></div>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn ghost" formnovalidate>ביטול</button>
+        <button value="save" class="btn primary">שמור</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

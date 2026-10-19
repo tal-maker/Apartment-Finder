@@ -1,0 +1,27 @@
+{
+  "name": "apartment-finder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Finds Tel Aviv rental apartments on Yad2, Facebook groups and Telegram, and sends WhatsApp alerts for new matches",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "MOCK_SOURCES=1 node --env-file-if-exists=.env --watch server/index.js",
+    "test": "node --test",
+    "telegram:login": "node --env-file-if-exists=.env scripts/telegram-login.js",
+    "facebook:login": "node --env-file-if-exists=.env scripts/facebook-login.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
+    "cheerio": "^1.2.0",
+    "express": "^5.1.0"
+  },
+  "optionalDependencies": {
+    "playwright-core": "^1.64.1",
+    "telegram": "^2.26.22"
+  }
+}
