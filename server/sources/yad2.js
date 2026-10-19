@@ -2,7 +2,7 @@
 // their data as JSON in <script id="__NEXT_DATA__">. Parsing walks that JSON for
 // objects that look like listings, so small changes in nesting don't break it.
 import { config } from '../config.js';
-import { USER_AGENT, launchPersistent } from '../browser.js';
+import { USER_AGENT, acquireContext } from '../browser.js';
 import { findNeighborhood } from '../neighborhoods.js';
 import { parseRentalText } from '../parse/text.js';
 
@@ -248,32 +248,14 @@ export function parseItemPage(html) {
   return out;
 }
 
-// In a visible window (BROWSER_HEADLESS=0) the browser stays open between scans, and
-// a captcha can be solved right there: the scan waits for it.
-let sharedContext;
-
-async function openContext() {
-  if (config.browser.headless) return launchPersistent();
-  if (!sharedContext) {
-    sharedContext = launchPersistent();
-    const context = await sharedContext.catch((err) => {
-      sharedContext = undefined;
-      throw err;
-    });
-    context.on('close', () => {
-      sharedContext = undefined;
-    });
-  }
-  return sharedContext;
-}
-
 // One browser for the whole scan, opened only if needed.
 function createFetcher() {
-  let contextPromise;
+  let browser;
   let page;
   const browserFetch = async (url) => {
-    contextPromise ??= openContext();
-    const context = await contextPromise;
+    // In a visible window the scan waits for a captcha to be solved there.
+    browser ??= acquireContext();
+    const { context } = await browser;
     page ??= context.pages()[0] ?? (await context.newPage());
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
     // The captcha provider sometimes redirects back after a short check.
@@ -295,9 +277,7 @@ function createFetcher() {
       }
     },
     async close() {
-      if (!contextPromise) return;
-      const context = await contextPromise.catch(() => null);
-      if (config.browser.headless) await context?.close();
+      await (await browser?.catch(() => null))?.release();
     },
   };
 }

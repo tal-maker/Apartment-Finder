@@ -1,6 +1,5 @@
-// Headless Chromium (via playwright-core) for Facebook, and for Yad2 when its bot
+// A real browser (via playwright-core) for Facebook, and for Yad2 when its bot
 // protection blocks plain HTTP requests. Optional: only loaded when needed.
-import fs from 'node:fs';
 import { config } from './config.js';
 
 export const USER_AGENT =
@@ -31,13 +30,6 @@ function explainLaunchError(err) {
   return err;
 }
 
-export async function launchBrowser({ headless = config.browser.headless } = {}) {
-  const chromium = await loadChromium();
-  return chromium.launch(launchOptions(headless)).catch((err) => {
-    throw explainLaunchError(err);
-  });
-}
-
 // A browser with a profile on disk (data/browser-profile), so cookies survive between runs.
 export async function launchPersistent({ headless = config.browser.headless } = {}) {
   const chromium = await loadChromium();
@@ -57,18 +49,27 @@ export async function launchPersistent({ headless = config.browser.headless } = 
     });
 }
 
-export async function withContext(fn, { storageState } = {}) {
-  const browser = await launchBrowser();
-  try {
-    const context = await browser.newContext({
-      userAgent: USER_AGENT,
-      locale: 'he-IL',
-      timezoneId: 'Asia/Jerusalem',
-      viewport: { width: 1280, height: 900 },
-      storageState: storageState && fs.existsSync(storageState) ? storageState : undefined,
-    });
-    return await fn(context);
-  } finally {
-    await browser.close();
+let sharedContext;
+
+// Headless: a fresh browser for each use, closed by release(). Visible
+// (BROWSER_HEADLESS=0): one window shared by Yad2 and Facebook and kept open between
+// scans, so a captcha or login check can be handled in it.
+export async function acquireContext() {
+  if (config.browser.headless) {
+    const context = await launchPersistent();
+    return { context, release: () => context.close() };
   }
+  sharedContext ??= launchPersistent().then(
+    (context) => {
+      context.on('close', () => {
+        sharedContext = undefined;
+      });
+      return context;
+    },
+    (err) => {
+      sharedContext = undefined;
+      throw err;
+    },
+  );
+  return { context: await sharedContext, release: async () => {} };
 }

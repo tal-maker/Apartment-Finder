@@ -39,7 +39,8 @@ export const config = {
   },
 
   facebook: {
-    statePath: path.resolve(env.FACEBOOK_STATE_PATH || 'data/facebook-state.json'),
+    // Written by `npm run facebook:login`; the session itself lives in the browser profile.
+    loginMarker: path.resolve(env.DATA_DIR || 'data', 'facebook-login.json'),
     scrolls: int(env.FACEBOOK_SCROLLS, 3),
   },
 
@@ -48,7 +49,7 @@ export const config = {
     // Installed browser to use instead of Playwright's Chromium. Edge ships with Windows.
     channel: env.BROWSER_CHANNEL || (process.platform === 'win32' && !env.CHROMIUM_PATH ? 'msedge' : undefined),
     // Keeps cookies between scans, so a captcha solved once stays solved.
-    profileDir: path.resolve(env.BROWSER_PROFILE_DIR || 'data/browser-profile'),
+    profileDir: path.resolve(env.BROWSER_PROFILE_DIR || path.join(env.DATA_DIR || 'data', 'browser-profile')),
     headless: env.BROWSER_HEADLESS !== '0',
   },
 
