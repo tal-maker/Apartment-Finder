@@ -51,7 +51,9 @@ export function extractNextData(html) {
   if (!m) {
     if (CAPTCHA_RE.test(html)) {
       throw new BlockedError(
-        'Yad2 is showing a captcha. Stop the app, run `npm run yad2:unblock`, solve the captcha in the window that opens, then start the app again.',
+        config.browser.headless
+          ? 'Yad2 is showing a captcha. Set BROWSER_HEADLESS=0 in .env and restart: the scan then runs in a visible browser window where you can solve the captcha.'
+          : 'Yad2 is still showing a captcha. Solve it in the Yad2 browser window, then press "סרוק עכשיו".',
       );
     }
     throw new Error('Yad2 page has no __NEXT_DATA__ (page layout changed?)');
@@ -246,17 +248,37 @@ export function parseItemPage(html) {
   return out;
 }
 
+// In a visible window (BROWSER_HEADLESS=0) the browser stays open between scans, and
+// a captcha can be solved right there: the scan waits for it.
+let sharedContext;
+
+async function openContext() {
+  if (config.browser.headless) return launchPersistent();
+  if (!sharedContext) {
+    sharedContext = launchPersistent();
+    const context = await sharedContext.catch((err) => {
+      sharedContext = undefined;
+      throw err;
+    });
+    context.on('close', () => {
+      sharedContext = undefined;
+    });
+  }
+  return sharedContext;
+}
+
 // One browser for the whole scan, opened only if needed.
 function createFetcher() {
   let contextPromise;
   let page;
   const browserFetch = async (url) => {
-    contextPromise ??= launchPersistent();
+    contextPromise ??= openContext();
     const context = await contextPromise;
     page ??= context.pages()[0] ?? (await context.newPage());
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
     // The captcha provider sometimes redirects back after a short check.
-    await page.waitForFunction(() => document.querySelector('#__NEXT_DATA__'), null, { timeout: 15000 }).catch(() => {});
+    const wait = config.browser.headless ? 15000 : 180000;
+    await page.waitForFunction(() => document.querySelector('#__NEXT_DATA__'), null, { timeout: wait }).catch(() => {});
     return page.content();
   };
   return {
@@ -273,7 +295,9 @@ function createFetcher() {
       }
     },
     async close() {
-      if (contextPromise) await (await contextPromise.catch(() => null))?.close();
+      if (!contextPromise) return;
+      const context = await contextPromise.catch(() => null);
+      if (config.browser.headless) await context?.close();
     },
   };
 }

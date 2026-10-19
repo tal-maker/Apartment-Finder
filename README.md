@@ -71,7 +71,7 @@ docker run -d --restart unless-stopped -p 3000:3000 --env-file .env -v $PWD/data
 2. `npm run yad2:unblock` – נפתח חלון של יד2; פותרים את ה־captcha עד שרואים דירות, ולוחצים Enter בטרמינל.
 3. מפעילים שוב `npm start`.
 
-אם ה־captcha חוזר כל הזמן: `BROWSER_HEADLESS=0` (הדפדפן ייפתח בחלון גלוי בכל סריקה) ו/או הגדלת `SCAN_INTERVAL_MINUTES`.
+אם ה־captcha חוזר כל הזמן: מגדירים `BROWSER_HEADLESS=0` ב־`.env`. אז נפתח חלון דפדפן גלוי של יד2 שנשאר פתוח בין הסריקות (אפשר למזער אותו, לא לסגור). כשמופיע בו captcha, פותרים אותו בחלון והסריקה ממשיכה. אפשר גם להגדיל את `SCAN_INTERVAL_MINUTES`.
 
 ### טלגרם
 - **ערוצים ציבוריים** – רק מוסיפים את שם הערוץ או קישור `t.me/...` בהגדרות. אין צורך בחשבון.
