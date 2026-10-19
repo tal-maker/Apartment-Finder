@@ -5,7 +5,7 @@ import express from 'express';
 import { config } from './config.js';
 import { AREAS } from './neighborhoods.js';
 import { FEATURES, matchListing, normalizeFilters } from './match.js';
-import { formatListingMessage, whatsappConfigured } from './notify/whatsapp.js';
+import { formatListingMessage, notifierConfigured } from './notify/notifier.js';
 import { sourceSettings } from './scanner.js';
 import { mtprotoConfigured } from './sources/telegram.js';
 import { facebookConfigured } from './sources/facebook.js';
@@ -39,7 +39,7 @@ export function createApp({ store, scanner, notifier }) {
       scanner: { lastScanAt: scanner.lastScanAt, nextScanAt: scanner.nextScanAt, running: Boolean(scanner.running) },
       telegram: { mode: mtprotoConfigured() ? 'mtproto' : 'web' },
       facebook: { loggedIn: facebookConfigured() },
-      whatsapp: { provider: config.whatsapp.provider || null, configured: whatsappConfigured() },
+      notify: { provider: config.notify.provider || null, configured: notifierConfigured() },
       llm: { enabled: config.llm.enabled, model: config.llm.enabled ? config.llm.model : null },
       lastRuns: store.lastRunPerSource(),
     });
@@ -114,7 +114,7 @@ export function createApp({ store, scanner, notifier }) {
   app.post('/api/searches/:id/test', async (req, res) => {
     const search = store.getSearch(Number(req.params.id));
     if (!search) return res.status(404).json({ error: 'not found' });
-    if (!notifier.configured()) return res.status(400).json({ error: 'WhatsApp לא מוגדר. ראו README.' });
+    if (!notifier.configured()) return res.status(400).json({ error: 'ההתראות לא מוגדרות (NOTIFY_PROVIDER). ראו README.' });
     const ids = store.matchedListingIds(search.id);
     const listing = store.listListings({ sinceDays: config.keepDays }).find((l) => ids.has(l.id));
     const text = listing

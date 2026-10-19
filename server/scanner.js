@@ -1,9 +1,9 @@
 // Runs every source on a schedule, stores new listings, matches them against the
-// saved searches and sends WhatsApp alerts for new matches.
+// saved searches and sends alerts (Telegram/WhatsApp) for new matches.
 import { config } from './config.js';
 import { fingerprint, mergeExtraction, textPostToListing } from './listing.js';
 import { matchListing } from './match.js';
-import { formatListingMessage } from './notify/whatsapp.js';
+import { formatListingMessage } from './notify/notifier.js';
 import { extractWithLlm, llmEnabled } from './parse/llm.js';
 import { fetchYad2 } from './sources/yad2.js';
 import { fetchTelegram } from './sources/telegram.js';
@@ -173,7 +173,7 @@ export class Scanner {
         await this.notifier.send(formatListingMessage(listing, { searchName: search.name, unknown }));
         this.store.markNotified(search.id, listing.id);
       } catch (err) {
-        this.log.error('WhatsApp send failed:', err.message);
+        this.log.error('Alert send failed:', err.message);
       }
     }
     if (alerts.length > max) {

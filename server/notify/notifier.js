@@ -1,4 +1,6 @@
-// WhatsApp alerts. Providers:
+// Alerts for new matches. Providers:
+//  - telegram:  a Telegram bot (free). Create one with @BotFather, then run
+//               `npm run telegram:bot-setup` to find your chat id.
 //  - callmebot: free, for personal alerts to your own number (https://www.callmebot.com/blog/free-api-whatsapp-messages/)
 //  - twilio:    Twilio WhatsApp (sandbox or approved sender)
 //  - meta:      WhatsApp Cloud API. Free-form text only reaches recipients who wrote to
@@ -12,9 +14,10 @@ import { CONDITION_LABELS, KIND_LABELS, SOURCE_LABELS } from '../listing.js';
 const FEATURE_LABELS = { mamad: 'ממ"ד', parking: 'חניה', storage: 'מחסן', elevator: 'מעלית', balcony: 'מרפסת', furnished: 'ריהוט', pets: 'בע"ח' };
 const UNKNOWN_LABELS = { ...FEATURE_LABELS, price: 'מחיר', rooms: 'חדרים', area: 'מיקום', size: 'גודל', floor: 'קומה', condition: 'מצב', entryDate: 'תאריך כניסה', broker: 'תיווך' };
 
-export function whatsappConfigured() {
-  const w = config.whatsapp;
+export function notifierConfigured() {
+  const w = config.notify;
   switch (w.provider) {
+    case 'telegram': return Boolean(w.telegramBotToken && w.telegramChatIds.length);
     case 'callmebot': return w.callmebotRecipients.length > 0;
     case 'twilio': return Boolean(w.twilioSid && w.twilioToken && w.twilioFrom && w.twilioTo.length);
     case 'meta': return Boolean(w.metaToken && w.metaPhoneNumberId && w.metaTo.length);
@@ -72,11 +75,30 @@ async function postForm(url, body, auth) {
   if (!res.ok) throw new Error(`Twilio HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
+const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// The message uses WhatsApp's *bold*; Telegram gets the same text as HTML.
+export function toTelegramHtml(text) {
+  return escapeHtml(text).replace(/\*([^*\n]+)\*/, '<b>$1</b>');
+}
+
 async function sendOne(text) {
-  const w = config.whatsapp;
+  const w = config.notify;
   switch (w.provider) {
     case 'console':
-      console.log(`[whatsapp]\n${text}\n`);
+      console.log(`[alert]\n${text}\n`);
+      return;
+    case 'telegram':
+      for (const chatId of w.telegramChatIds) {
+        const res = await fetch(`https://api.telegram.org/bot${w.telegramBotToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: toTelegramHtml(text), parse_mode: 'HTML' }),
+          signal: AbortSignal.timeout(20000),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!body.ok) throw new Error(`Telegram bot: ${body.description ?? `HTTP ${res.status}`}`);
+      }
       return;
     case 'callmebot':
       for (const recipient of w.callmebotRecipients) {
@@ -119,16 +141,16 @@ async function sendOne(text) {
       }
       return;
     default:
-      throw new Error('WhatsApp is not configured (set WHATSAPP_PROVIDER).');
+      throw new Error('Alerts are not configured (set NOTIFY_PROVIDER).');
   }
 }
 
 // Sends messages one at a time with a pause, since CallMeBot and the sandbox
 // providers rate-limit bursts.
-export function createWhatsAppNotifier({ send = sendOne, delayMs = 3000 } = {}) {
+export function createNotifier({ send = sendOne, delayMs = config.notify.provider === 'telegram' ? 500 : 3000 } = {}) {
   let queue = Promise.resolve();
   return {
-    configured: () => whatsappConfigured() || send !== sendOne,
+    configured: () => notifierConfigured() || send !== sendOne,
     send(text) {
       const task = queue.then(async () => {
         await send(text);

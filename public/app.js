@@ -5,6 +5,7 @@ const FEATURE_LABELS = { mamad: 'ממ"ד', parking: 'חניה', storage: 'מחס
 const CONDITION_LABELS = { new: 'חדשה', renovated: 'משופצת', good: 'במצב שמור', needs_renovation: 'דורשת שיפוץ' };
 const KIND_LABELS = { rent: 'דירה להשכרה', roommate: 'שותפים', sublet: 'סאבלט', seeking: 'מחפשים דירה', sale: 'מכירה', other: 'אחר' };
 const SOURCE_LABELS = { yad2: 'יד2', facebook: 'פייסבוק', telegram: 'טלגרם' };
+const PROVIDER_LABELS = { telegram: 'בוט טלגרם', callmebot: 'וואטסאפ · CallMeBot', twilio: 'וואטסאפ · Twilio', meta: 'וואטסאפ · Meta', console: 'הדפסה ללוג' };
 const UNKNOWN_LABELS = { ...FEATURE_LABELS, price: 'מחיר', rooms: 'חדרים', area: 'מיקום', size: 'גודל', floor: 'קומה', condition: 'מצב', entryDate: 'כניסה', broker: 'תיווך' };
 const STORAGE_KEY = 'apartment-finder:filters';
 
@@ -301,10 +302,10 @@ async function loadSearches() {
         </div>
         <div class="search-controls">
           <label><input type="checkbox" data-toggle="active" ${s.active ? 'checked' : ''}> פעיל</label>
-          <label><input type="checkbox" data-toggle="notify" ${s.notify ? 'checked' : ''}> וואטסאפ</label>
+          <label><input type="checkbox" data-toggle="notify" ${s.notify ? 'checked' : ''}> התראות</label>
           <button class="btn small" data-action="matches">הצג התאמות</button>
           <button class="btn small" data-action="edit">עריכה</button>
-          <button class="btn small" data-action="test">בדיקת וואטסאפ</button>
+          <button class="btn small" data-action="test">שלח הודעת בדיקה</button>
           <button class="btn small danger" data-action="delete">מחק</button>
         </div>
       </div>`,
@@ -413,7 +414,7 @@ function renderStatus() {
     : '⚠️ אין חיבור לפייסבוק. הריצו npm run facebook:login (ראו README).';
 
   const items = [
-    [meta.whatsapp.configured, `וואטסאפ: ${meta.whatsapp.configured ? `מוגדר (${meta.whatsapp.provider})` : 'לא מוגדר – לא יישלחו התראות'}`],
+    [meta.notify.configured, `התראות: ${meta.notify.configured ? `מוגדרות (${PROVIDER_LABELS[meta.notify.provider] ?? meta.notify.provider})` : 'לא מוגדרות – לא יישלחו הודעות'}`],
     [meta.llm.enabled, `ניתוח מודעות טקסט עם Claude: ${meta.llm.enabled ? 'פעיל' : 'כבוי (משתמש בזיהוי לפי ביטויים)'}`],
     [true, `סריקה כל ${meta.intervalMinutes} דקות${meta.mock ? ' · מצב דמו (MOCK_SOURCES)' : ''}`],
     ...meta.lastRuns.map((r) => [r.ok, `${SOURCE_LABELS[r.source] ?? r.source}: ${r.ok ? `תקין, ${timeAgo(r.finishedAt)}` : `שגיאה – ${r.error}`}`]),

@@ -51,8 +51,11 @@ export const config = {
     model: env.ANTHROPIC_MODEL || 'claude-opus-5-5',
   },
 
-  whatsapp: {
-    provider: (env.WHATSAPP_PROVIDER || '').toLowerCase(), // callmebot | twilio | meta | console
+  notify: {
+    // telegram | callmebot | twilio | meta | console. WHATSAPP_PROVIDER is the older name.
+    provider: (env.NOTIFY_PROVIDER || env.WHATSAPP_PROVIDER || '').toLowerCase(),
+    telegramBotToken: env.TELEGRAM_BOT_TOKEN || '',
+    telegramChatIds: list(env.TELEGRAM_ALERT_CHAT_IDS),
     callmebotRecipients: list(env.CALLMEBOT_RECIPIENTS), // "972501234567:apikey"
     twilioSid: env.TWILIO_ACCOUNT_SID || '',
     twilioToken: env.TWILIO_AUTH_TOKEN || '',
