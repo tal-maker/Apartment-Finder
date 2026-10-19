@@ -2,7 +2,7 @@
 // their data as JSON in <script id="__NEXT_DATA__">. Parsing walks that JSON for
 // objects that look like listings, so small changes in nesting don't break it.
 import { config } from '../config.js';
-import { USER_AGENT, fetchHtmlWithBrowser } from '../browser.js';
+import { USER_AGENT, launchPersistent } from '../browser.js';
 import { findNeighborhood } from '../neighborhoods.js';
 import { parseRentalText } from '../parse/text.js';
 
@@ -17,16 +17,20 @@ const CONDITION_BY_TEXT = [
 ];
 
 export function searchUrl(page = 1) {
-  const url = new URL('https://www.yad2.co.il/realestate/rent');
+  const url = new URL('/realestate/rent', config.yad2.baseUrl);
   url.searchParams.set('city', config.yad2.city);
   if (page > 1) url.searchParams.set('page', String(page));
   return url.toString();
 }
 
-export const itemUrl = (token) => `https://www.yad2.co.il/realestate/item/${token}`;
+export const itemUrl = (token) => new URL(`/realestate/item/${token}`, config.yad2.baseUrl).toString();
 
-async function fetchHtml(url) {
-  if (config.yad2.useBrowser) return fetchHtmlWithBrowser(url);
+const CAPTCHA_RE = /captcha|shieldsquare|perimeterx|are you for real|validate\.perfdrive|radware/i;
+
+// Switched on for the rest of the run the first time plain requests hit a captcha.
+let preferBrowser = config.yad2.useBrowser === 'always';
+
+async function fetchPlain(url) {
   const res = await fetch(url, {
     headers: {
       'User-Agent': USER_AGENT,
@@ -45,8 +49,10 @@ async function fetchHtml(url) {
 export function extractNextData(html) {
   const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (!m) {
-    if (/captcha|shieldsquare|perimeterx|are you for real|validate\.perfdrive/i.test(html)) {
-      throw new BlockedError('Yad2 bot protection (captcha) blocked the request. Set YAD2_USE_BROWSER=1 or slow down scans.');
+    if (CAPTCHA_RE.test(html)) {
+      throw new BlockedError(
+        'Yad2 is showing a captcha. Stop the app, run `npm run yad2:unblock`, solve the captcha in the window that opens, then start the app again.',
+      );
     }
     throw new Error('Yad2 page has no __NEXT_DATA__ (page layout changed?)');
   }
@@ -240,10 +246,51 @@ export function parseItemPage(html) {
   return out;
 }
 
+// One browser for the whole scan, opened only if needed.
+function createFetcher() {
+  let contextPromise;
+  let page;
+  const browserFetch = async (url) => {
+    contextPromise ??= launchPersistent();
+    const context = await contextPromise;
+    page ??= context.pages()[0] ?? (await context.newPage());
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    // The captcha provider sometimes redirects back after a short check.
+    await page.waitForFunction(() => document.querySelector('#__NEXT_DATA__'), null, { timeout: 15000 }).catch(() => {});
+    return page.content();
+  };
+  return {
+    async html(url) {
+      if (preferBrowser) return browserFetch(url);
+      try {
+        const html = await fetchPlain(url);
+        extractNextData(html); // throws BlockedError on a captcha page
+        return html;
+      } catch (err) {
+        if (!(err instanceof BlockedError) || config.yad2.useBrowser === 'never') throw err;
+        preferBrowser = true;
+        return browserFetch(url);
+      }
+    },
+    async close() {
+      if (contextPromise) await (await contextPromise.catch(() => null))?.close();
+    },
+  };
+}
+
 export async function fetchYad2({ isKnown = () => false } = {}) {
+  const fetcher = createFetcher();
+  try {
+    return await scanYad2(fetcher, isKnown);
+  } finally {
+    await fetcher.close();
+  }
+}
+
+async function scanYad2(fetcher, isKnown) {
   const listings = new Map();
   for (let page = 1; page <= config.yad2.pages; page++) {
-    const html = await fetchHtml(searchUrl(page));
+    const html = await fetcher.html(searchUrl(page));
     for (const listing of parseSearchPage(html)) listings.set(listing.id, listing);
     if (page < config.yad2.pages) await sleep(1500 + Math.random() * 1500);
   }
@@ -254,7 +301,7 @@ export async function fetchYad2({ isKnown = () => false } = {}) {
     details++;
     try {
       await sleep(800 + Math.random() * 1200);
-      const extra = parseItemPage(await fetchHtml(listing.url));
+      const extra = parseItemPage(await fetcher.html(listing.url));
       const { brokerHint, text: description, ...fields } = extra;
       for (const [key, value] of Object.entries(fields)) if (value != null) listing[key] = value;
       if (description) listing.text = [listing.text, description].filter(Boolean).join('\n');

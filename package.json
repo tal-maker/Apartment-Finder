@@ -12,6 +12,7 @@
     "start": "node --env-file-if-exists=.env server/index.js",
     "dev": "MOCK_SOURCES=1 node --env-file-if-exists=.env --watch server/index.js",
     "test": "node --test",
+    "yad2:unblock": "node --env-file-if-exists=.env scripts/yad2-unblock.js",
     "telegram:bot-setup": "node --env-file-if-exists=.env scripts/telegram-bot-setup.js",
     "telegram:login": "node --env-file-if-exists=.env scripts/telegram-login.js",
     "facebook:login": "node --env-file-if-exists=.env scripts/facebook-login.js"

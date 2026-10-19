@@ -24,9 +24,11 @@ export const config = {
 
   yad2: {
     city: env.YAD2_CITY || '5000', // 5000 = Tel Aviv-Yafo
+    baseUrl: env.YAD2_BASE_URL || 'https://www.yad2.co.il',
     pages: int(env.YAD2_PAGES, 2),
     maxDetails: int(env.YAD2_MAX_DETAILS, 20),
-    useBrowser: env.YAD2_USE_BROWSER === '1',
+    // auto: plain HTTP first, switch to the browser once Yad2 shows a captcha.
+    useBrowser: env.YAD2_USE_BROWSER === '1' ? 'always' : env.YAD2_USE_BROWSER === '0' ? 'never' : 'auto',
   },
 
   telegram: {
@@ -43,6 +45,10 @@ export const config = {
 
   browser: {
     executablePath: env.CHROMIUM_PATH || undefined,
+    // Installed browser to use instead of Playwright's Chromium. Edge ships with Windows.
+    channel: env.BROWSER_CHANNEL || (process.platform === 'win32' && !env.CHROMIUM_PATH ? 'msedge' : undefined),
+    // Keeps cookies between scans, so a captcha solved once stays solved.
+    profileDir: path.resolve(env.BROWSER_PROFILE_DIR || 'data/browser-profile'),
     headless: env.BROWSER_HEADLESS !== '0',
   },
 
