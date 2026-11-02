@@ -74,6 +74,7 @@ function renderFilterForm(root, filters = {}) {
     <details open class="group"><summary>מחיר, חדרים וגודל</summary>
       <div class="pair"><label>מחיר מ־<input type="number" name="priceMin" step="100" min="0" value="${val(f.priceMin)}"></label>
         <label>עד <input type="number" name="priceMax" step="100" min="0" value="${val(f.priceMax)}"></label></div>
+      <label class="inline"><input type="checkbox" name="includeNoPrice" ${f.includeNoPrice ? 'checked' : ''}> כולל מודעות שלא מציינות מחיר</label>
       <div class="pair"><label>חדרים מ־<input type="number" name="roomsMin" step="0.5" min="1" value="${val(f.roomsMin)}"></label>
         <label>עד <input type="number" name="roomsMax" step="0.5" min="1" value="${val(f.roomsMax)}"></label></div>
       <div class="pair"><label>גודל מינ׳ (מ״ר) <input type="number" name="sizeMin" min="0" value="${val(f.sizeMin)}"></label>
@@ -146,6 +147,7 @@ function readFilterForm(root) {
     neighborhoods: all('neighborhoods'),
     priceMin: num('priceMin'),
     priceMax: num('priceMax'),
+    includeNoPrice: $('[name="includeNoPrice"]', root).checked,
     roomsMin: num('roomsMin'),
     roomsMax: num('roomsMax'),
     sizeMin: num('sizeMin'),
@@ -274,6 +276,7 @@ function describeFilters(f) {
   const areaNames = f.areas?.map((id) => meta.areas.find((a) => a.id === id)?.name ?? id) ?? [];
   if (areaNames.length || f.neighborhoods?.length) parts.push([...areaNames, ...f.neighborhoods].join(', '));
   if (f.priceMin || f.priceMax) parts.push(`${f.priceMin ? fmtPrice(f.priceMin) : ''}–${f.priceMax ? fmtPrice(f.priceMax) : ''}`);
+  if (f.includeNoPrice) parts.push('כולל בלי מחיר');
   if (f.roomsMin || f.roomsMax) parts.push(`${f.roomsMin ?? ''}–${f.roomsMax ?? ''} חד׳`);
   if (f.sizeMin) parts.push(`מ־${f.sizeMin} מ״ר`);
   if (f.conditions?.length) parts.push(f.conditions.map((c) => CONDITION_LABELS[c]).join('/'));

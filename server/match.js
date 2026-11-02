@@ -9,6 +9,7 @@ export const DEFAULT_FILTERS = {
   neighborhoods: [],
   priceMin: null,
   priceMax: null,
+  includeNoPrice: false, // posts that don't state a price are hidden unless this is set
   roomsMin: null,
   roomsMax: null,
   sizeMin: null,
@@ -61,7 +62,8 @@ export function matchListing(listing, rawFilters, { today = new Date() } = {}) {
     else if (!inArea && !inNeighborhood) failed.push('area');
   }
 
-  if (f.priceMin != null || f.priceMax != null) {
+  if (listing.price == null && !f.includeNoPrice) failed.push('noPrice');
+  else if (f.priceMin != null || f.priceMax != null) {
     check('price', listing.price, (p) => (f.priceMin == null || p >= f.priceMin) && (f.priceMax == null || p <= f.priceMax));
   }
   if (f.roomsMin != null || f.roomsMax != null) {

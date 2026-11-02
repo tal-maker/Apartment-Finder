@@ -65,3 +65,19 @@ test('seeking posts never match', async () => {
   await scanner.scan();
   assert.equal(sent.length, 0);
 });
+
+test('stored posts are re-parsed and stale matches dropped', async () => {
+  const { store, scanner } = setup({});
+  const text = 'למכירה דירת 4 חדרים בפלורנטין 2,950,000 ₪';
+  store.insertListing({
+    id: 'facebook:1', source: 'facebook', externalId: '1', url: 'u', title: text, text, kind: 'rent', price: 50000, rooms: 4,
+    area: 'south', neighborhood: 'פלורנטין', images: [], sourceName: 'פייסבוק · קבוצה',
+  });
+  const search = store.createSearch({ name: 'הכל', filters: {} });
+  store.addMatch(search.id, 'facebook:1');
+  assert.equal(scanner.reparseStoredPosts(), 1);
+  const listing = store.getListing('facebook:1');
+  assert.equal(listing.kind, 'sale');
+  assert.equal(listing.price, null);
+  assert.equal(store.matchedListingIds(search.id).size, 0);
+});

@@ -37,23 +37,47 @@ function toNumber(raw) {
   return Number.isFinite(n) ? n * mult : null;
 }
 
+// Every number in the post is a candidate; the one in rent context wins. Other
+// monthly costs (ארנונה, ועד, deposit...), sizes and years are skipped, and so are
+// numbers with no currency or rent word next to them.
+const PRICE_TOKEN = /(?<![\d.,])(\d{1,3}(?:[,.]\d{3})+|\d{4,7}|\d{1,2}(?:\.\d)?\s?(?:k|K|אלף))(?![\d])/g;
+const RENT_WORDS = /(?:מחיר|שכירות|שכ"ד|שכ״ד|שכר דירה|מבקשים|מבקש|מבקשת|עלות|להשכרה ב?-?)[^\d\n]{0,12}$/;
+const OTHER_COSTS = /(?:ארנונה|ועד|פיקדון|פקדון|ערבות|ביטחון|בטחון|ערבון|תיווך|חשמל|מים|גז|אינטרנט|הנחה|צ'ק|צ׳ק|מקדמה)[^\d\n]{0,12}$/;
+const CURRENCY_AFTER = /^\s*(?:₪|ש"ח|ש״ח|שח\b|שקל|nis\b)/i;
+const CURRENCY_BEFORE = /(?:₪|ש"ח|ש״ח)\s*$/;
+const MONTHLY_AFTER = /^\s*(?:₪|ש"ח|ש״ח|שח)?\s*(?:לחודש|בחודש|לח'|לחו'|\/\s*חודש)/;
+
 export function extractPrice(text) {
   const t = text.replace(PHONE_RE, ' ');
-  const patterns = [
-    /(?:מחיר|שכירות|שכ"ד|שכ״ד|שכר דירה|מבקשים|מבקש|עלות)[^\d\n]{0,15}(\d{1,2}[,.]?\d{3}|\d{1,2}(?:\.\d)?\s?(?:k|K|אלף))/,
-    /(\d{1,2}[,.]?\d{3}|\d{1,2}(?:\.\d)?\s?(?:k|K|אלף))\s*(?:₪|ש"ח|ש״ח|שח|שקל|nis|NIS)/,
-    /(?:₪|ש"ח|ש״ח)\s*(\d{1,2}[,.]?\d{3})/,
-    /(\d{1,2}[,.]?\d{3}|\d{1,2}(?:\.\d)?\s?(?:k|K|אלף))\s*(?:לחודש|בחודש|לח'|לחו')/,
-    /(?:^|\s)(\d{1,2}(?:\.\d)?[kK])(?=\s|$|[,.!])/,
-  ];
-  for (const re of patterns) {
-    const m = t.match(re);
-    if (!m) continue;
-    let n = toNumber(m[1].replace(/\.(?=\d{3}\b)/, ''));
-    if (n != null && n < 100) n *= 1000; // "6.5k" already handled; "6.5 אלף" too
-    if (n != null && n >= 1500 && n <= 60000) return Math.round(n);
+  let best = null;
+  for (const m of t.matchAll(PRICE_TOKEN)) {
+    const raw = m[1];
+    const before = t.slice(Math.max(0, m.index - 25), m.index);
+    const after = t.slice(m.index + raw.length, m.index + raw.length + 20);
+    let n = toNumber(raw.replace(/[.,](?=\d{3}(?!\d))/g, ''));
+    if (n == null) continue;
+    if (n < 100) n *= 1000; // "6.5 אלף"
+    if (n < 1500 || n > 60000) continue;
+    if (OTHER_COSTS.test(before)) continue;
+    if (/^\s*(?:מ"ר|מ״ר|מטר|מ'|sqm)/.test(after)) continue;
+    let score = 0;
+    if (RENT_WORDS.test(before)) score += 3;
+    if (CURRENCY_AFTER.test(after) || CURRENCY_BEFORE.test(before)) score += 2;
+    if (MONTHLY_AFTER.test(after)) score += 2;
+    if (/[kK]$|אלף$/.test(raw)) score += 2;
+    if (score < 2) continue;
+    if (!best || score > best.score) best = { n, score };
   }
-  return null;
+  return best ? Math.round(best.n) : null;
+}
+
+// A price in the hundreds of thousands or millions means the post is a sale.
+export function hasSalePrice(text) {
+  return (
+    /(?<![\d.,])\d{1,2}[,.]\d{3}[,.]\d{3}(?![\d])\s*(?:₪|ש"ח|ש״ח|שח|nis)|(?:₪|ש"ח|ש״ח)\s*\d{1,2}[,.]\d{3}[,.]\d{3}(?![\d])/i.test(text) ||
+    /(?<![\d.,])[1-9]\d{2}[,.]\d{3}(?![\d.,])\s*(?:₪|ש"ח|ש״ח|שח)/.test(text) ||
+    /\d(?:[.,]\d+)?\s*(?:מיליון|מליון)/.test(text)
+  );
 }
 
 export function extractRooms(text) {
@@ -141,7 +165,9 @@ export function extractBroker(text) {
 export function extractKind(text) {
   const head = text.slice(0, 160);
   if (/(?:^|\s)(?:מחפש|מחפשת|מחפשים|מחפשות|דרושה|דרוש)\s+(?:דירה|דירת|יחידת|סטודיו|חדר)|looking for an? (?:apartment|room|flat)/i.test(head)) return 'seeking';
-  if (/למכירה|דירה למכירה|for sale/i.test(head)) return 'sale';
+  // A bare "למכירה" in a rental post is usually furniture ("ריהוט למכירה").
+  const rentCue = /להשכרה|לשכירות|שכ"ד|שכ״ד|לחודש|for rent/i.test(text);
+  if ((/למכירה|for sale/i.test(head) && !rentCue) || /(?:מוכר|מוכרת|מוכרים)\s+(?:את\s+)?(?:ה)?(?:דירה|דירת|דירתנו|הדירה)|דירה\s+למכירה|נכס\s+למכירה/.test(text) || hasSalePrice(text)) return 'sale';
   if (/סאבלט|סבלט|sublet|תת השכרה|לתקופה קצרה|לחודש-חודשיים/i.test(text)) return 'sublet';
   if (/מחפש(?:ת|ים|ות)?\s+שות(?:ף|פה|פים|פות)|שותף לדירה|שותפה לדירה|חדר בדירת שותפים|מחליף|מחליפה|roommate|flatmate/i.test(text)) return 'roommate';
   return null;

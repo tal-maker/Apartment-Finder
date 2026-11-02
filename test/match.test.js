@@ -38,3 +38,10 @@ test('entry dates, kinds, other cities, keywords', () => {
   assert.equal(matchListing({ ...base, city: 'other' }, {}).match, false);
   assert.equal(matchListing({ ...base, text: 'דירת מרתף' }, { excludeKeywords: ['מרתף'] }).match, false);
 });
+
+test('listings without a price are hidden unless asked for', () => {
+  const noPrice = { ...base, price: null };
+  assert.equal(matchListing(noPrice, {}).match, false);
+  assert.equal(matchListing(noPrice, { includeNoPrice: true }).match, true);
+  assert.deepEqual(matchListing(noPrice, { includeNoPrice: true, priceMax: 8000 }).unknown, ['price']);
+});

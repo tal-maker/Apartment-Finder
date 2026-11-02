@@ -139,11 +139,40 @@ export class Scanner {
       this.store.insertListing(listing);
       return true;
     }
-    // Keep enriched fields from the first time we saw it when a later scan lacks them.
+    // Keep enriched fields (Yad2 item pages, Claude) from the first time we saw it
+    // when a later scan lacks them. Posts parsed by the rules alone are re-parsed in
+    // full, so parser fixes reach them.
     const merged = { ...listing };
-    for (const [key, value] of Object.entries(existing)) if (merged[key] == null && value != null) merged[key] = value;
+    if (this.#keepsEarlierFields(listing)) {
+      for (const [key, value] of Object.entries(existing)) if (merged[key] == null && value != null) merged[key] = value;
+    }
     this.store.updateListing(merged);
     return false;
+  }
+
+  #keepsEarlierFields(listing) {
+    return listing.source === 'yad2' || Boolean(this.extract);
+  }
+
+  // Re-parses stored Facebook/Telegram posts with the current rules and drops
+  // matches they no longer fit (alerts already sent stay recorded).
+  reparseStoredPosts() {
+    if (this.extract) return 0;
+    let changed = 0;
+    for (const stored of this.store.listListings({ sinceDays: config.keepDays, limit: 100000 })) {
+      if (stored.source === 'yad2' || stored.source === 'mock' || !stored.text) continue;
+      const listing = textPostToListing(stored);
+      this.store.updateListing({ ...listing, fingerprint: fingerprint(listing) });
+      changed++;
+    }
+    const listings = new Map(this.store.listListings({ sinceDays: config.keepDays, limit: 100000 }).map((l) => [l.id, l]));
+    for (const search of this.store.listSearches()) {
+      for (const id of this.store.matchedListingIds(search.id)) {
+        const listing = listings.get(id);
+        if (listing && !matchListing(listing, search.filters).match) this.store.removeUnnotifiedMatch(search.id, id);
+      }
+    }
+    return changed;
   }
 
   #matchNew(listings, baselineSources) {

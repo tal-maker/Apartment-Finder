@@ -202,6 +202,10 @@ export class Store {
       .run(searchId, listingId, now).changes > 0;
   }
 
+  removeUnnotifiedMatch(searchId, listingId) {
+    this.db.prepare('DELETE FROM matches WHERE search_id = ? AND listing_id = ? AND notified_at IS NULL').run(searchId, listingId);
+  }
+
   markNotified(searchId, listingId, now = new Date().toISOString()) {
     this.db.prepare('UPDATE matches SET notified_at = ? WHERE search_id = ? AND listing_id = ?').run(now, searchId, listingId);
   }

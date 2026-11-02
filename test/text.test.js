@@ -72,3 +72,23 @@ test('negation only applies to the word right after it', () => {
   assert.equal(parse('ללא חניה').parking, false);
   assert.equal(parse('אין אפשרות לחניה').parking, false);
 });
+
+test('sale posts and their prices', () => {
+  assert.equal(parse('למכירה דירת 4 חדרים בפלורנטין 2,950,000 ₪').kind, 'sale');
+  assert.equal(parse('למכירה דירת 4 חדרים בפלורנטין 2,950,000 ₪').price, null);
+  assert.equal(parse('דירת 3 חדרים 3,200,000 ש"ח בלב העיר').kind, 'sale');
+  assert.equal(parse('דירה 3 חד ברמת אביב 3.2 מיליון').kind, 'sale');
+  assert.equal(parse('מוכרים את הדירה שלנו בנווה צדק, 4 חדרים').kind, 'sale');
+  const rent = parse('להשכרה 2 חדרים, ריהוט למכירה, 6,000 ₪ לחודש');
+  assert.equal(rent.kind, 'rent');
+  assert.equal(rent.price, 6000);
+});
+
+test('rent is picked over other costs, sizes and years', () => {
+  assert.equal(parse('3 חדרים, ארנונה 650 ₪, ועד 250, שכ"ד 7,200').price, 7200);
+  assert.equal(parse('3 חדרים, פיקדון 15,000 ₪, מחיר 6,800').price, 6800);
+  assert.equal(parse('4 חדרים 95 מ"ר בניין משנת 2015, 9500 ש"ח').price, 9500);
+  assert.equal(parse('דירה 4 חד׳ ב-₪8,900').price, 8900);
+  assert.equal(parse('2 חדרים בכרם התימנים, מחיר בפרטי').price, null);
+  assert.equal(parse('דירה ברחוב 2015 קומה 3').price, null);
+});

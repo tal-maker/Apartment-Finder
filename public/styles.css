@@ -105,6 +105,7 @@ label.block { display: block; margin: 8px 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .chip { background: var(--chip); border-radius: 999px; padding: 3px 10px; font-size: 0.88rem; cursor: pointer; }
 .features { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 0.88rem; margin-top: 6px; }
+label.inline { display: block; font-size: 0.88rem; margin: 2px 0 6px; }
 .strict { display: block; border-top: 1px solid var(--border); padding-top: 10px; font-size: 0.9rem; }
 
 .results-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }

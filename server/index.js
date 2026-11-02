@@ -9,6 +9,8 @@ const store = openDb(path.join(config.dataDir, 'apartments.db'));
 const notifier = createNotifier();
 const scanner = new Scanner({ store, notifier });
 const app = createApp({ store, scanner, notifier });
+const reparsed = scanner.reparseStoredPosts();
+if (reparsed) console.log(`Re-read ${reparsed} stored Facebook/Telegram posts with the current rules`);
 
 app.listen(config.port, () => {
   console.log(`Apartment finder on http://localhost:${config.port}${config.mockSources ? ' (mock sources)' : ''}`);
