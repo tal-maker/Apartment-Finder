@@ -55,3 +55,13 @@ test('source config normalization', () => {
   assert.equal(normalizeChat('@tlv_rentals'), 'tlv_rentals');
   assert.equal(groupFeedUrl('https://www.facebook.com/groups/12345/?ref=share'), 'https://www.facebook.com/groups/12345/?sorting_setting=CHRONOLOGICAL');
 });
+
+test('facebook links and ids', async () => {
+  const { cleanPermalink, postId, legacyPostIds } = await import('../server/sources/facebook.js');
+  assert.equal(cleanPermalink('https://www.facebook.com/groups/358/posts/111/?__cft__[0]=x&__tn__=R'), 'https://www.facebook.com/groups/358/posts/111/');
+  const g = 'https://www.facebook.com/groups/358/';
+  const short = { text: 'דירת 3 חדרים בבזל 11,000 '.repeat(6), permalink: null };
+  const expanded = { text: `${short.text}\nעוד פרטים שנפתחו אחרי לחיצה על "עוד"`, permalink: null };
+  assert.equal(postId(g, short), postId(g, expanded));
+  assert.ok(legacyPostIds(g, short).includes(postId(g, short)));
+});

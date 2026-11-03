@@ -45,3 +45,11 @@ test('listings without a price are hidden unless asked for', () => {
   assert.equal(matchListing(noPrice, { includeNoPrice: true }).match, true);
   assert.deepEqual(matchListing(noPrice, { includeNoPrice: true, priceMax: 8000 }).unknown, ['price']);
 });
+
+test('posts that are not offers never match, even with no kind selected', () => {
+  for (const kind of ['other', 'seeking', 'sale']) {
+    assert.equal(matchListing({ ...base, kind }, { kinds: [] }).match, false);
+    assert.equal(matchListing({ ...base, kind }, { kinds: ['rent', kind] }).match, false);
+  }
+  assert.equal(matchListing(base, { kinds: [] }).match, true);
+});

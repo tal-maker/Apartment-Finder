@@ -96,7 +96,11 @@ export class Scanner {
         const { items, errors } = Array.isArray(result) ? { items: result, errors: [] } : { items: result.posts, errors: result.errors ?? [] };
         let newCount = 0;
         for (const item of items) {
-          const listing = await this.#toListing(item, isKnown(item.id));
+          // Earlier versions may have stored this post under another id.
+          const storedId = isKnown(item.id) ? item.id : item.aliasIds?.find(isKnown);
+          if (storedId) item.id = storedId;
+          delete item.aliasIds;
+          const listing = await this.#toListing(item, Boolean(storedId));
           if (!listing) continue;
           if (this.#save(listing)) {
             newCount++;

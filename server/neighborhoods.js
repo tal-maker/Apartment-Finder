@@ -100,6 +100,20 @@ export const AREAS = [
   },
 ];
 
+// Streets that lie (almost) entirely inside one area, for posts that name the street
+// but not the neighborhood ("3 חדרים בבזל"). Long streets that cross several areas
+// (דיזנגוף, בן יהודה, אבן גבירול, הירקון...) are left out on purpose.
+export const STREETS = {
+  old_north: ['בזל', 'נורדאו', 'שדרות נורדאו', 'ירמיהו', 'זבוטינסקי', 'אוסישקין', 'יהושע בן נון', 'ארנון', 'שלמה המלך', 'דוד המלך', 'מאנה', 'סמטת שלוה', 'ישעיהו', 'ברנדייס הישן'],
+  new_north: ['יהודה המכבי', 'פנקס', 'ברנדייס', 'ויצמן', 'בני דן', 'ליסין', 'שטרן', 'פיכמן', 'נמיר מרדכי'],
+  center: ['אחד העם', 'נחלת בנימין', 'מזאה', 'בלפור', 'יהודה הלוי', 'המלך גורג', 'קינג גורג', 'בוגרשוב', 'טשרניחובסקי', 'ביאליק', 'ברנר', 'מאפו', 'יוסף אליהו', 'נחמני', 'לילינבלום', 'הכובשים', 'פרישמן', 'גורדון', 'מלצט', 'שבזי', 'רוקח', 'שד חן', 'שדרות חן', 'שדרות רוטשילד', 'קלישר', 'בצלאל יפה'],
+  south: ['ויטל', 'אברבנאל', 'וולפסון', 'מטלון', 'קומפרט', 'הקישון', 'לוינסקי', 'צלנוב', 'הגדוד העברי', 'ראש פינה', 'פלורנטין', 'שוקן', 'אליפלט'],
+  jaffa: ['יפת', 'יהודה הימית', 'שבטי ישראל', 'רזיאל', 'עולי ציון', 'שדרות ירושלים', 'הדולפין', 'קדם', 'יהודה מרגוזה', 'מרגוזה', 'ארליך'],
+  ramat_aviv: ['איינשטיין', 'אינשטיין', 'ברודצקי', 'חיים לבנון', 'טאגור', 'אחימאיר', 'אופנהיימר', 'קהילת סלוניקי', 'משה סנה', 'בית"ר', 'רפידים', 'מבצע קדש'],
+  east: ['לה גוארדיה', 'לגוארדיה', 'יצחק שדה', 'משה דיין', 'ההגנה', 'בית אל'],
+  north_east: ['ראול ולנברג', 'הברזל', 'דבורה הנביאה', 'קהילת ציון'],
+};
+
 export const OTHER_CITIES = [
   'רמת גן', 'גבעתיים', 'בת ים', 'חולון', 'בני ברק', 'הרצליה', 'רמת השרון', 'פתח תקווה', 'פתח תקוה',
   'ראשון לציון', 'ירושלים', 'חיפה', 'קריית אונו', 'קרית אונו', 'אור יהודה', 'גבעת שמואל', 'רעננה', 'כפר סבא',
@@ -134,6 +148,21 @@ export function findNeighborhood(text) {
   const normalized = normalizeHebrew(text);
   for (const entry of INDEX) {
     if (containsAlias(normalized, entry.alias)) return { neighborhood: entry.neighborhood, area: entry.area };
+  }
+  return null;
+}
+
+const STREET_INDEX = Object.entries(STREETS)
+  .flatMap(([area, streets]) => streets.map((street) => ({ alias: normalizeHebrew(street), area })))
+  .sort((a, b) => b.alias.length - a.alias.length);
+
+// Only used when no neighborhood is named. Returns the area; the neighborhood is left empty.
+export function findAreaByStreet(text) {
+  const normalized = normalizeHebrew(text);
+  for (const entry of STREET_INDEX) {
+    if (containsAlias(normalized, entry.alias) || normalized.includes(` רחוב ${entry.alias.trim()} `) || normalized.includes(` רח ${entry.alias.trim()} `)) {
+      return { neighborhood: null, area: entry.area };
+    }
   }
   return null;
 }

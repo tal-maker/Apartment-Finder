@@ -52,7 +52,9 @@ export function matchListing(listing, rawFilters, { today = new Date() } = {}) {
 
   if (listing.userStatus === 'hidden') failed.push('hidden');
   if (listing.city === 'other') failed.push('city');
-  if (f.kinds.length && !f.kinds.includes(listing.kind)) failed.push('kind');
+  // Only offers count; an empty selection means whole-apartment rentals.
+  const kinds = (f.kinds.length ? f.kinds : ['rent']).filter((k) => ['rent', 'roommate', 'sublet'].includes(k));
+  if (!kinds.includes(listing.kind)) failed.push('kind');
   if (f.sources.length && !f.sources.includes(listing.source)) failed.push('source');
 
   if (f.areas.length || f.neighborhoods.length) {

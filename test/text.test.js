@@ -92,3 +92,15 @@ test('rent is picked over other costs, sizes and years', () => {
   assert.equal(parse('2 חדרים בכרם התימנים, מחיר בפרטי').price, null);
   assert.equal(parse('דירה ברחוב 2015 קומה 3').price, null);
 });
+
+test('bare thousands-formatted price and street-only location', () => {
+  const r = parse('3 חדרים בבזל ללא תיווך\nקומה 4 ללא מעלית, גג ענקי. דירה משופצת. מקלט בבניין. 11,000.\nמוכרים חלק מהציוד שלנו');
+  assert.equal(r.kind, 'rent');
+  assert.equal(r.price, 11000);
+  assert.equal(r.area, 'old_north');
+  assert.equal(r.city, 'תל אביב יפו');
+  assert.equal(parse('דירה ברחוב ויטל 3 חדרים 6,500').area, 'south');
+  assert.equal(parse('3 חדרים בבלפור, פיקדון 20,000').price, null);
+  assert.equal(parse('2 חדרים ברמת גן ברחוב ביאליק 5,000 ₪').city, 'other');
+  assert.equal(parse('דירה בשבזי, נווה צדק 9,000 ש"ח').neighborhood, 'נווה צדק');
+});

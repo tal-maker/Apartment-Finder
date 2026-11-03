@@ -168,7 +168,8 @@ function readFilterForm(root) {
 
 // ---------- listings
 function listingCard(l) {
-  const place = [l.street && `${l.street}${l.houseNumber ? ` ${l.houseNumber}` : ''}`, l.neighborhood].filter(Boolean).join(', ');
+  const areaLabel = l.neighborhood ?? meta.areas.find((a) => a.id === l.area)?.name;
+  const place = [l.street && `${l.street}${l.houseNumber ? ` ${l.houseNumber}` : ''}`, areaLabel].filter(Boolean).join(', ');
   const facts = [
     l.rooms && `${l.rooms} חד׳`,
     l.sizeSqm && `${l.sizeSqm} מ״ר`,

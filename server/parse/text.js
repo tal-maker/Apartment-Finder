@@ -1,6 +1,6 @@
 // Rule-based extraction of rental details from free Hebrew text (Facebook and
 // Telegram posts, Yad2 descriptions). Every field is null when the text doesn't say.
-import { findNeighborhood, mentionsOtherCity, normalizeHebrew } from '../neighborhoods.js';
+import { findAreaByStreet, findNeighborhood, mentionsOtherCity, normalizeHebrew } from '../neighborhoods.js';
 
 const NEG = '(?:ללא|בלי|אין|לא כולל|לא כוללת|אין אפשרות ל|ללא אפשרות ל)';
 
@@ -46,6 +46,7 @@ const OTHER_COSTS = /(?:ארנונה|ועד|פיקדון|פקדון|ערבות|�
 const CURRENCY_AFTER = /^\s*(?:₪|ש"ח|ש״ח|שח\b|שקל|nis\b)/i;
 const CURRENCY_BEFORE = /(?:₪|ש"ח|ש״ח)\s*$/;
 const MONTHLY_AFTER = /^\s*(?:₪|ש"ח|ש״ח|שח)?\s*(?:לחודש|בחודש|לח'|לחו'|\/\s*חודש)/;
+const OTHER_COSTS_AFTER = /^\s*(?:₪|ש"ח|ש״ח|שח)?\s*(?:פיקדון|פקדון|ערבות|ביטחון|ארנונה|ועד|דמי תיווך|מקדמה)/;
 
 export function extractPrice(text) {
   const t = text.replace(PHONE_RE, ' ');
@@ -58,14 +59,17 @@ export function extractPrice(text) {
     if (n == null) continue;
     if (n < 100) n *= 1000; // "6.5 אלף"
     if (n < 1500 || n > 60000) continue;
-    if (OTHER_COSTS.test(before)) continue;
+    if (OTHER_COSTS.test(before) || OTHER_COSTS_AFTER.test(after)) continue;
     if (/^\s*(?:מ"ר|מ״ר|מטר|מ'|sqm)/.test(after)) continue;
     let score = 0;
     if (RENT_WORDS.test(before)) score += 3;
     if (CURRENCY_AFTER.test(after) || CURRENCY_BEFORE.test(before)) score += 2;
     if (MONTHLY_AFTER.test(after)) score += 2;
     if (/[kK]$|אלף$/.test(raw)) score += 2;
-    if (score < 2) continue;
+    // "11,000" written with a thousands separator is a price even without ₪.
+    if (/^\d{1,2}[,.]\d{3}$/.test(raw)) score += 1;
+    else if (score < 2) continue;
+    if (score < 1) continue;
     if (!best || score > best.score) best = { n, score };
   }
   return best ? Math.round(best.n) : null;
@@ -191,7 +195,8 @@ export function extractPhone(text) {
 export function parseRentalText(text, { reference = new Date() } = {}) {
   const raw = String(text ?? '');
   const t = raw.replace(/‏|‎/g, '');
-  const location = findNeighborhood(t);
+  const otherCity = mentionsOtherCity(t);
+  const location = findNeighborhood(t) ?? (otherCity ? null : findAreaByStreet(t));
   const { street, houseNumber } = extractStreet(t);
   const price = extractPrice(t);
   const rooms = extractRooms(t);
@@ -206,7 +211,7 @@ export function parseRentalText(text, { reference = new Date() } = {}) {
     floor: extractFloor(t),
     neighborhood: location?.neighborhood ?? null,
     area: location?.area ?? null,
-    city: location ? 'תל אביב יפו' : mentionsOtherCity(t) ? 'other' : null,
+    city: location ? 'תל אביב יפו' : otherCity ? 'other' : null,
     street,
     houseNumber,
     entryDate: extractEntryDate(t, reference),

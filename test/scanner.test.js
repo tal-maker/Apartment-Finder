@@ -81,3 +81,16 @@ test('stored posts are re-parsed and stale matches dropped', async () => {
   assert.equal(listing.price, null);
   assert.equal(store.matchedListingIds(search.id).size, 0);
 });
+
+test('a post stored under an old id is updated, not announced again', async () => {
+  const text = 'להשכרה בצפון הישן 3 חדרים, 7,200 ₪, ממ"ד';
+  const post = (id, url, aliasIds) => ({ id, aliasIds, source: 'telegram', externalId: id, url, text, images: [] });
+  const { store, scanner, sent, feeds } = setup({ telegram: [post('telegram:old', 'https://group/feed')] });
+  store.createSearch({ name: 'הכל', filters: {} });
+  await scanner.scan();
+  feeds.telegram = [post('telegram:new', 'https://group/posts/1/', ['telegram:old'])];
+  const result = await scanner.scan();
+  assert.equal(result.newListings, 0);
+  assert.equal(sent.length, 0);
+  assert.equal(store.getListing('telegram:old').url, 'https://group/posts/1/');
+});

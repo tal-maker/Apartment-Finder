@@ -42,18 +42,29 @@ export function extractPostsInPage() {
   const results = [];
   const seen = new Set();
   for (const post of posts) {
-    const messageNode = [...post.querySelectorAll('[data-ad-preview="message"], [data-ad-comet-preview="message"]')].find((n) => !inComment(n, post));
-    let text = messageNode?.innerText?.trim();
-    if (!text) {
-      const blocks = [...post.querySelectorAll('div[dir="auto"]')]
+    // A shared or "back to relevance" post keeps the original's text in a second block.
+    const parts = [...post.querySelectorAll('[data-ad-preview="message"], [data-ad-comet-preview="message"]')]
+      .filter((n) => !inComment(n, post))
+      .map((n) => n.innerText.trim())
+      .filter(Boolean);
+    let text = [...new Set(parts)].join('\n');
+    if (text.length < 120) {
+      const block = [...post.querySelectorAll('div[dir="auto"]')]
         .filter((d) => !inComment(d, post))
         .map((d) => d.innerText.trim())
-        .filter((t) => t.length > 20);
-      text = blocks.sort((a, b) => b.length - a.length)[0];
+        .filter((t) => t.length > 20 && !text.includes(t))
+        .sort((a, b) => b.length - a.length)[0];
+      if (block) text = text ? `${text}\n${block}` : block;
     }
     if (!text) continue;
     const links = [...post.querySelectorAll('a[href]')].filter((a) => !inComment(a, post)).map((a) => a.href);
-    const permalink = links.find((h) => /\/groups\/[^/]+\/(?:posts|permalink)\/\d+/.test(h)) ?? links.find((h) => /\/posts\/|story_fbid=|\/permalink\//.test(h)) ?? null;
+    let permalink = links.find((h) => /\/groups\/[^/]+\/(?:posts|permalink)\/\d+/.test(h)) ?? links.find((h) => /\/posts\/\d|story_fbid=|\/permalink\/\d/.test(h)) ?? null;
+    if (!permalink) {
+      // Photos in a group post link to ...&set=gm.<post id>.
+      const postIdFromPhoto = links.map((h) => h.match(/[?&]set=(?:gm|pcb)\.(\d+)/)?.[1]).find(Boolean);
+      const group = location.pathname.match(/\/groups\/([^/]+)/)?.[1];
+      if (postIdFromPhoto && group) permalink = `https://www.facebook.com/groups/${group}/posts/${postIdFromPhoto}/`;
+    }
     const key = permalink?.split('?')[0] ?? text.slice(0, 200);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -64,10 +75,43 @@ export function extractPostsInPage() {
   return results;
 }
 
+const sha = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 16);
+
 export function postId(groupUrl, post) {
   const m = post.permalink?.match(/(?:posts|permalink)\/(\d+)/) ?? post.permalink?.match(/story_fbid=(\d+)/);
   if (m) return m[1];
-  return crypto.createHash('sha1').update(`${groupUrl}\n${post.text.slice(0, 300)}`).digest('hex').slice(0, 16);
+  // The start of the text: stays the same whether or not "See more" was expanded.
+  return sha(`${groupUrl}\n${post.text.replace(/\s+/g, ' ').trim().slice(0, 100)}`);
+}
+
+// Drops Facebook's tracking parameters (__cft__, __tn__) from a post link.
+export function cleanPermalink(link) {
+  return /story_fbid=/.test(link) ? link.replace(/&?__(?:cft|tn)__[^&]*/g, '') : link.split('?')[0];
+}
+
+// Ids this post may have been stored under by earlier versions, so it isn't
+// announced again once its real link is found.
+export function legacyPostIds(groupUrl, post) {
+  return [sha(`${groupUrl}\n${post.text.slice(0, 300)}`), postId(groupUrl, { ...post, permalink: null })];
+}
+
+// Where to send people when a post's own link couldn't be read: the group's
+// search for the post's opening words, which usually lists the post first.
+export function groupSearchUrl(groupUrl, text) {
+  const group = groupUrl.match(/groups\/([^/?#]+)/)?.[1];
+  const words = text.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
+  return `https://www.facebook.com/groups/${group}/search/?q=${encodeURIComponent(words)}`;
+}
+
+// Facebook fills in a post's link (the timestamp) only when the mouse is over it.
+export async function revealPermalinks(page) {
+  const anchors = await page.locator('div[role="feed"] a[role="link"]:not([href*="/posts/"]):not([href*="/user/"])').all();
+  for (const anchor of anchors.slice(0, 80)) {
+    const href = (await anchor.getAttribute('href').catch(() => null)) ?? '';
+    if (href && href !== '#' && !href.startsWith('#') && !/__cft__|__tn__/.test(href)) continue;
+    await anchor.hover({ timeout: 800 }).catch(() => {});
+  }
+  await page.waitForTimeout(500);
 }
 
 export async function fetchFacebook(groups) {
@@ -94,13 +138,15 @@ export async function fetchFacebook(groups) {
           await page.mouse.wheel(0, 2500);
           await page.waitForTimeout(1500 + Math.random() * 1000);
         }
+        await revealPermalinks(page);
         for (const post of await page.evaluate(extractPostsInPage)) {
           const id = postId(url, post);
           posts.push({
             id: `facebook:${id}`,
+            aliasIds: legacyPostIds(url, post).filter((old) => old !== id).map((old) => `facebook:${old}`),
             source: 'facebook',
             externalId: id,
-            url: post.permalink ?? url,
+            url: post.permalink ? cleanPermalink(post.permalink) : groupSearchUrl(url, post.text),
             text: post.text,
             author: post.author,
             images: post.images,
