@@ -53,6 +53,12 @@ export const config = {
     headless: env.BROWSER_HEADLESS !== '0',
   },
 
+  geocode: {
+    // OpenStreetMap's free geocoder; GEOCODE=0 turns address lookups off (areas still show).
+    enabled: env.GEOCODE !== '0',
+    url: env.GEOCODE_URL || 'https://nominatim.openstreetmap.org/search',
+  },
+
   llm: {
     enabled: Boolean(env.ANTHROPIC_API_KEY) && env.LLM_EXTRACTION !== '0',
     model: env.ANTHROPIC_MODEL || 'claude-opus-5-5',

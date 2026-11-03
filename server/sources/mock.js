@@ -24,14 +24,14 @@ export function mockYad2() {
       title: 'דירה, בן יהודה 120, הצפון הישן - צפון', text: '', kind: 'rent', price: 7800, rooms: 3, sizeSqm: 75, floor: 3,
       neighborhood: 'הצפון הישן - צפון', area: 'old_north', city: 'תל אביב יפו', street: 'בן יהודה', houseNumber: 120,
       entryDate: '2026-12-01', condition: 'renovated', mamad: true, parking: false, storage: true, elevator: true, balcony: true,
-      furnished: false, pets: null, broker: false, images: [], sourceName: 'יד2', postedAt: null,
+      furnished: false, pets: null, broker: false, images: [], sourceName: 'יד2', postedAt: null, lat: 32.0921, lng: 34.7735, geoPrecision: 'exact',
     },
     {
       id: 'yad2:mock-2', source: 'yad2', externalId: 'mock-2', url: 'https://www.yad2.co.il/realestate/item/mock-2',
       title: 'דירה, פלורנטין 8, פלורנטין', text: '', kind: 'rent', price: 6200, rooms: 2, sizeSqm: 50, floor: 1,
       neighborhood: 'פלורנטין', area: 'south', city: 'תל אביב יפו', street: 'פלורנטין', houseNumber: 8,
       entryDate: 'immediate', condition: 'good', mamad: false, parking: false, storage: false, elevator: false, balcony: true,
-      furnished: true, pets: true, broker: true, images: [], sourceName: 'יד2', postedAt: null,
+      furnished: true, pets: true, broker: true, images: [], sourceName: 'יד2', postedAt: null, lat: 32.0571, lng: 34.7689, geoPrecision: 'exact',
     },
   ];
 }

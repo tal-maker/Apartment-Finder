@@ -9,9 +9,15 @@ import { fetchYad2 } from './sources/yad2.js';
 import { fetchTelegram } from './sources/telegram.js';
 import { fetchFacebook } from './sources/facebook.js';
 import { mockTextPosts, mockYad2 } from './sources/mock.js';
+import { SITES, fetchSite } from './sources/sites.js';
+
+export const SOURCE_ORDER = ['yad2', 'madlan', 'komo', 'homeless', 'telegram', 'facebook'];
 
 export const DEFAULT_SOURCE_SETTINGS = {
   yad2: { enabled: true },
+  madlan: { enabled: false, url: '' },
+  komo: { enabled: false, url: '' },
+  homeless: { enabled: false, url: '' },
   telegram: { enabled: false, chats: [] },
   facebook: { enabled: false, groups: [] },
 };
@@ -20,6 +26,7 @@ export function sourceSettings(store) {
   const saved = store.getSetting('sources', {});
   return {
     yad2: { ...DEFAULT_SOURCE_SETTINGS.yad2, ...saved.yad2 },
+    ...Object.fromEntries(Object.keys(SITES).map((key) => [key, { ...DEFAULT_SOURCE_SETTINGS[key], ...saved[key] }])),
     telegram: { ...DEFAULT_SOURCE_SETTINGS.telegram, ...saved.telegram },
     facebook: { ...DEFAULT_SOURCE_SETTINGS.facebook, ...saved.facebook },
   };
@@ -32,18 +39,21 @@ export function defaultFetchers() {
       yad2: async () => mockYad2(),
       telegram: async () => ({ posts: mockTextPosts(), errors: [] }),
       facebook: async () => ({ posts: [], errors: [] }),
+      ...Object.fromEntries(Object.keys(SITES).map((key) => [key, async () => []])),
     };
   }
   return {
     yad2: (_settings, { isKnown }) => fetchYad2({ isKnown }),
     telegram: (settings) => fetchTelegram(settings.chats),
     facebook: (settings) => fetchFacebook(settings.groups),
+    ...Object.fromEntries(Object.keys(SITES).map((key) => [key, (settings) => fetchSite(key, settings.url)])),
   };
 }
 
 export class Scanner {
-  constructor({ store, notifier, fetchers = defaultFetchers(), extract = llmEnabled() ? extractWithLlm : null, log = console }) {
+  constructor({ store, notifier, geocoder = null, fetchers = defaultFetchers(), extract = llmEnabled() ? extractWithLlm : null, log = console }) {
     this.store = store;
+    this.geocoder = geocoder;
     this.notifier = notifier;
     this.fetchers = fetchers;
     this.extract = extract;
@@ -82,7 +92,7 @@ export class Scanner {
     const newListings = [];
     const baselineSources = new Set();
 
-    for (const source of ['yad2', 'telegram', 'facebook']) {
+    for (const source of SOURCE_ORDER) {
       const sourceConfig = settings[source];
       if (!sourceConfig.enabled) continue;
       if (source === 'telegram' && !sourceConfig.chats?.length && !config.mockSources) continue;
@@ -115,6 +125,8 @@ export class Scanner {
       }
     }
 
+    // Map positions; address lookups continue in the background.
+    this.geocoder?.locate(newListings)?.catch?.(() => {});
     const alerts = this.#matchNew(newListings, baselineSources);
     await this.#sendAlerts(alerts);
     this.store.pruneOlderThan(config.keepDays);
@@ -164,7 +176,7 @@ export class Scanner {
     if (this.extract) return 0;
     let changed = 0;
     for (const stored of this.store.listListings({ sinceDays: config.keepDays, limit: 100000 })) {
-      if (stored.source === 'yad2' || stored.source === 'mock' || !stored.text) continue;
+      if (!['facebook', 'telegram'].includes(stored.source) || !stored.text) continue;
       const listing = textPostToListing(stored);
       this.store.updateListing({ ...listing, fingerprint: fingerprint(listing) });
       changed++;

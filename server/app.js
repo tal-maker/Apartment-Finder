@@ -7,6 +7,7 @@ import { AREAS } from './neighborhoods.js';
 import { FEATURES, matchListing, normalizeFilters } from './match.js';
 import { formatListingMessage, notifierConfigured } from './notify/notifier.js';
 import { sourceSettings } from './scanner.js';
+import { SITES } from './sources/sites.js';
 import { mtprotoConfigured } from './sources/telegram.js';
 import { facebookConfigured } from './sources/facebook.js';
 
@@ -33,6 +34,7 @@ export function createApp({ store, scanner, notifier }) {
   app.get('/api/meta', (_req, res) => {
     res.json({
       areas: AREAS,
+      sites: Object.fromEntries(Object.entries(SITES).map(([key, s]) => [key, { label: s.label, defaultUrl: s.defaultUrl }])),
       features: FEATURES,
       mock: config.mockSources,
       intervalMinutes: config.scanIntervalMinutes,
@@ -143,6 +145,15 @@ export function createApp({ store, scanner, notifier }) {
         enabled: Boolean(body.facebook?.enabled ?? current.facebook.enabled),
         groups: body.facebook?.groups !== undefined ? cleanList(body.facebook.groups) : current.facebook.groups,
       },
+      ...Object.fromEntries(
+        Object.keys(SITES).map((key) => [
+          key,
+          {
+            enabled: Boolean(body[key]?.enabled ?? current[key].enabled),
+            url: body[key]?.url !== undefined ? String(body[key].url).trim() : current[key].url,
+          },
+        ]),
+      ),
     };
     store.setSetting('sources', next);
     res.json(next);
@@ -158,6 +169,7 @@ export function createApp({ store, scanner, notifier }) {
     }
   });
 
+  app.use('/vendor/leaflet', express.static(path.join(here, '..', 'node_modules', 'leaflet', 'dist')));
   app.use(express.static(path.join(here, '..', 'public')));
   return app;
 }

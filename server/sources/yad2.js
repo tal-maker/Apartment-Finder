@@ -127,8 +127,15 @@ export function normalizeFeedItem(item) {
     images: [meta.coverImage, ...(meta.images ?? [])].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 6),
     sourceName: 'יד2',
     postedAt: null,
+    ...coordinates(address.coords?.lat, address.coords?.lon ?? address.coords?.lng),
     raw: item,
   };
+}
+
+function coordinates(lat, lng) {
+  const la = Number(lat);
+  const ln = Number(lng);
+  return Number.isFinite(la) && Number.isFinite(ln) && la && ln ? { lat: la, lng: ln, geoPrecision: 'exact' } : {};
 }
 
 function normalizeLegacyItem(item) {
@@ -168,6 +175,7 @@ function normalizeLegacyItem(item) {
     images: Object.values(item.images ?? {}).map((i) => i?.src ?? i).filter((v) => typeof v === 'string').slice(0, 6),
     sourceName: 'יד2',
     postedAt: item.date_added ? new Date(item.date_added.replace(' ', 'T') + '+03:00').toISOString() : null,
+    ...coordinates(item.coordinates?.latitude, item.coordinates?.longitude),
     raw: item,
   };
 }

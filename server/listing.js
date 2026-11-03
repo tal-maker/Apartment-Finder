@@ -13,6 +13,8 @@ export function textPostToListing(post, { reference } = {}) {
     title: firstLine.length > 90 ? `${firstLine.slice(0, 87)}…` : firstLine,
     text: post.text,
     ...parsed,
+    // Fields the source marks explicitly (e.g. table cells) fill what the text didn't say.
+    ...Object.fromEntries(Object.entries(post.hints ?? {}).filter(([key]) => parsed[key] == null)),
     images: post.images ?? [],
     author: post.author ?? null,
     sourceName: post.sourceName ?? post.source,
@@ -57,6 +59,6 @@ export function fingerprint(listing) {
   return null;
 }
 
-export const SOURCE_LABELS = { yad2: 'יד2', facebook: 'פייסבוק', telegram: 'טלגרם', mock: 'דמו' };
+export const SOURCE_LABELS = { yad2: 'יד2', madlan: 'מדלן', komo: 'קומו', homeless: 'הומלס', facebook: 'פייסבוק', telegram: 'טלגרם', mock: 'דמו' };
 export const CONDITION_LABELS = { new: 'חדשה', renovated: 'משופצת', good: 'במצב שמור', needs_renovation: 'דורשת שיפוץ' };
 export const KIND_LABELS = { rent: 'השכרה', roommate: 'שותפים', sublet: 'סאבלט', seeking: 'מחפשים דירה', sale: 'מכירה', other: 'אחר' };

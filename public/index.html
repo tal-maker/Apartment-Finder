@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>מוצא דירות ת״א</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -48,8 +49,21 @@
             <option value="price_desc">מחיר: מהיקר</option>
           </select>
           <span id="results-count" class="muted"></span>
+          <div class="view-toggle" role="group" aria-label="תצוגת תוצאות">
+            <button type="button" data-view="list" class="active">📋 רשימה</button>
+            <button type="button" data-view="map">🗺️ מפה</button>
+          </div>
         </div>
         <div id="listings" class="cards"></div>
+        <div id="map-wrap" hidden>
+          <div id="map"></div>
+          <p class="map-legend">
+            <span class="dot exact"></span> כתובת מדויקת
+            <span class="dot approx"></span> מיקום משוער (לפי שכונה או אזור)
+            <span id="map-missing"></span>
+            <span id="map-sources" class="map-sources"></span>
+          </p>
+        </div>
       </div>
     </section>
 
@@ -71,6 +85,7 @@
               <legend><label><input type="checkbox" name="yad2"> יד2</label></legend>
               <p class="muted">דירות להשכרה בתל אביב-יפו, 2 העמודים האחרונים בכל סריקה.</p>
             </fieldset>
+            <div id="site-sources"></div>
             <fieldset>
               <legend><label><input type="checkbox" name="telegram"> טלגרם</label></legend>
               <p class="muted" id="telegram-mode"></p>
@@ -116,6 +131,7 @@
   </dialog>
 
   <div id="toast" role="status"></div>
+  <script src="vendor/leaflet/leaflet.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

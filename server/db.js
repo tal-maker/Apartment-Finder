@@ -7,12 +7,15 @@ const LISTING_FIELDS = [
   'neighborhood', 'area', 'city', 'street', 'house_number', 'entry_date', 'condition',
   'mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets', 'broker',
   'images', 'contact', 'author', 'source_name', 'posted_at', 'fingerprint', 'raw',
+  'lat', 'lng', 'geo_precision',
 ];
+const REAL_FIELDS = ['price', 'rooms', 'size_sqm', 'floor', 'house_number', 'lat', 'lng'];
+const columnType = (f) => (REAL_FIELDS.includes(f) ? 'REAL' : BOOLEANS.includes(f) ? 'INTEGER' : 'TEXT');
 
 const CAMEL = {
   external_id: 'externalId', size_sqm: 'sizeSqm', house_number: 'houseNumber', entry_date: 'entryDate',
   source_name: 'sourceName', posted_at: 'postedAt', first_seen_at: 'firstSeenAt', updated_at: 'updatedAt',
-  user_status: 'userStatus',
+  user_status: 'userStatus', geo_precision: 'geoPrecision',
 };
 const BOOLEANS = ['mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets', 'broker'];
 
@@ -48,7 +51,7 @@ export function openDb(file) {
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS listings (
       id TEXT PRIMARY KEY,
-      ${LISTING_FIELDS.map((f) => `${f} ${['price', 'rooms', 'size_sqm', 'floor', 'house_number'].includes(f) ? 'REAL' : BOOLEANS.includes(f) ? 'INTEGER' : 'TEXT'}`).join(',\n      ')},
+      ${LISTING_FIELDS.map((f) => `${f} ${columnType(f)}`).join(',\n      ')},
       user_status TEXT,
       first_seen_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -82,6 +85,12 @@ export function openDb(file) {
       error TEXT
     );
   `);
+  // Databases created by older versions lack newer columns.
+  const existing = new Set(db.prepare('PRAGMA table_info(listings)').all().map((c) => c.name));
+  for (const field of LISTING_FIELDS) {
+    if (!existing.has(field)) db.exec(`ALTER TABLE listings ADD COLUMN ${field} ${columnType(field)}`);
+  }
+  db.exec('CREATE TABLE IF NOT EXISTS geocache (query TEXT PRIMARY KEY, lat REAL, lng REAL, at TEXT NOT NULL)');
   return new Store(db);
 }
 
@@ -93,7 +102,10 @@ export class Store {
       `INSERT INTO listings (${cols.join(', ')}) VALUES (${cols.map((c) => `:${c}`).join(', ')})`,
     );
     this.updateListingStmt = db.prepare(
-      `UPDATE listings SET ${LISTING_FIELDS.filter((f) => f !== 'source' && f !== 'external_id').map((f) => `${f} = :${f}`).join(', ')}, updated_at = :updated_at WHERE id = :id`,
+      // Re-scans don't carry coordinates found later by the geocoder, so keep those.
+      `UPDATE listings SET ${LISTING_FIELDS.filter((f) => f !== 'source' && f !== 'external_id')
+        .map((f) => (['lat', 'lng', 'geo_precision'].includes(f) ? `${f} = COALESCE(:${f}, ${f})` : `${f} = :${f}`))
+        .join(', ')}, updated_at = :updated_at WHERE id = :id`,
     );
   }
 
@@ -145,6 +157,20 @@ export class Store {
     const before = new Date(Date.now() - days * 86400000).toISOString();
     this.db.prepare("DELETE FROM listings WHERE first_seen_at < ? AND (user_status IS NULL OR user_status != 'favorite')").run(before);
     this.db.prepare('DELETE FROM matches WHERE listing_id NOT IN (SELECT id FROM listings)').run();
+  }
+
+  setLocation(id, { lat, lng, geoPrecision }) {
+    this.db.prepare('UPDATE listings SET lat = ?, lng = ?, geo_precision = ? WHERE id = ?').run(lat, lng, geoPrecision, id);
+  }
+
+  getGeocache(query) {
+    return this.db.prepare('SELECT lat, lng FROM geocache WHERE query = ?').get(query) ?? null;
+  }
+
+  setGeocache(query, point) {
+    this.db
+      .prepare('INSERT INTO geocache (query, lat, lng, at) VALUES (?, ?, ?, ?) ON CONFLICT(query) DO UPDATE SET lat = excluded.lat, lng = excluded.lng, at = excluded.at')
+      .run(query, point?.lat ?? null, point?.lng ?? null, new Date().toISOString());
   }
 
   // ---- searches

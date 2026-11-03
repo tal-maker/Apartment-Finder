@@ -65,3 +65,34 @@ test('facebook links and ids', async () => {
   assert.equal(postId(g, short), postId(g, expanded));
   assert.ok(legacyPostIds(g, short).includes(postId(g, short)));
 });
+
+test('madlan-style embedded listings', async () => {
+  const { parseEmbeddedListings } = await import('../server/sources/sites.js');
+  const listings = parseEmbeddedListings('madlan', fixture('madlan-search.html'));
+  assert.deepEqual(listings.map((l) => l.id), ['madlan:Xa1b2c3', 'madlan:Yd4e5f6', 'madlan:Wj1k2l3']);
+  const [a, b, c] = listings;
+  assert.equal(a.url, 'https://www.madlan.co.il/listings/Xa1b2c3');
+  assert.equal(a.price, 8500);
+  assert.equal(a.rooms, 3);
+  assert.equal(a.sizeSqm, 80);
+  assert.equal(a.area, 'old_north');
+  assert.equal(a.street, 'בזל');
+  assert.equal(a.houseNumber, 12);
+  assert.equal(a.broker, true);
+  assert.equal(a.condition, 'renovated');
+  assert.equal(a.parking, true);
+  assert.equal(a.mamad, false);
+  assert.equal(a.lat, 32.0905);
+  assert.equal(a.geoPrecision, 'exact');
+  assert.deepEqual(a.images, ['https://images2.madlan.co.il/1.jpg']);
+  assert.equal(b.broker, false);
+  assert.equal(b.floor, 0);
+  assert.equal(b.area, 'south');
+  assert.equal(c.city, 'other');
+});
+
+test('table cells give rooms and address', async () => {
+  const { hintsFromCells } = await import('../server/sources/sites.js');
+  assert.deepEqual(hintsFromCells(['דירה', 'תל אביב', 'פלורנטין', 'ויטל 5', '3', 'קומה 2', '6,500 ₪']), { rooms: 3, street: 'ויטל', houseNumber: 5 });
+  assert.deepEqual(hintsFromCells(['2.5', 'בן יהודה 120']), { rooms: 2.5, street: 'בן יהודה', houseNumber: 120 });
+});

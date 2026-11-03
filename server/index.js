@@ -4,13 +4,17 @@ import { openDb } from './db.js';
 import { createApp } from './app.js';
 import { Scanner } from './scanner.js';
 import { createNotifier } from './notify/notifier.js';
+import { createGeocoder } from './geocode.js';
 
 const store = openDb(path.join(config.dataDir, 'apartments.db'));
 const notifier = createNotifier();
-const scanner = new Scanner({ store, notifier });
+const geocoder = createGeocoder({ store });
+const scanner = new Scanner({ store, notifier, geocoder });
 const app = createApp({ store, scanner, notifier });
 const reparsed = scanner.reparseStoredPosts();
 if (reparsed) console.log(`Re-read ${reparsed} stored Facebook/Telegram posts with the current rules`);
+// Listings stored before the map existed get their positions now.
+geocoder.locate(store.listListings({ sinceDays: config.keepDays, limit: 100000 }).filter((l) => l.lat == null)).catch(() => {});
 
 app.listen(config.port, () => {
   console.log(`Apartment finder on http://localhost:${config.port}${config.mockSources ? ' (mock sources)' : ''}`);

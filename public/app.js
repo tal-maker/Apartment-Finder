@@ -4,7 +4,9 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const FEATURE_LABELS = { mamad: 'ממ"ד', parking: 'חניה', storage: 'מחסן', elevator: 'מעלית', balcony: 'מרפסת', furnished: 'מרוהטת', pets: 'חיות מחמד' };
 const CONDITION_LABELS = { new: 'חדשה', renovated: 'משופצת', good: 'במצב שמור', needs_renovation: 'דורשת שיפוץ' };
 const KIND_LABELS = { rent: 'דירה להשכרה', roommate: 'שותפים', sublet: 'סאבלט', seeking: 'מחפשים דירה', sale: 'מכירה', other: 'אחר' };
-const SOURCE_LABELS = { yad2: 'יד2', facebook: 'פייסבוק', telegram: 'טלגרם' };
+const SOURCE_LABELS = { yad2: 'יד2', madlan: 'מדלן', komo: 'קומו', homeless: 'הומלס', facebook: 'פייסבוק', telegram: 'טלגרם' };
+const SOURCE_COLORS = { yad2: '#e8590c', madlan: '#7048e8', komo: '#2f9e44', homeless: '#c2255c', facebook: '#1877f2', telegram: '#229ed9' };
+const VIEW_KEY = 'apartment-finder:view';
 const PROVIDER_LABELS = { telegram: 'בוט טלגרם', callmebot: 'וואטסאפ · CallMeBot', twilio: 'וואטסאפ · Twilio', meta: 'וואטסאפ · Meta', console: 'הדפסה ללוג' };
 const UNKNOWN_LABELS = { ...FEATURE_LABELS, price: 'מחיר', rooms: 'חדרים', area: 'מיקום', size: 'גודל', floor: 'קומה', condition: 'מצב', entryDate: 'כניסה', broker: 'תיווך' };
 const STORAGE_KEY = 'apartment-finder:filters';
@@ -232,12 +234,106 @@ async function loadListings() {
   const container = $('#listings');
   try {
     const { total, items } = await api(`/api/listings?${params}`);
+    lastItems = items;
     $('#results-count').textContent = `${total} דירות`;
+    if (currentView === 'map') renderMap(items);
     container.innerHTML = items.length
       ? items.map(listingCard).join('')
       : `<div class="empty">אין עדיין דירות שמתאימות. ${meta.lastRuns.length ? 'נסו להרחיב את הסינון.' : 'הסריקה הראשונה רצה ברקע – זה לוקח דקה או שתיים.'}</div>`;
   } catch (err) {
     container.innerHTML = `<div class="empty error">שגיאה בטעינה: ${esc(err.message)}</div>`;
+  }
+}
+
+// ---------- map
+let lastItems = [];
+let currentView = (() => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'map' ? 'map' : 'list';
+  } catch {
+    return 'list';
+  }
+})();
+let map = null;
+let markers = null;
+let fittedFor = '';
+
+function setView(view) {
+  currentView = view;
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {}
+  $$('.view-toggle button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  $('#listings').hidden = view === 'map';
+  $('#map-wrap').hidden = view !== 'map';
+  if (view === 'map') renderMap(lastItems);
+}
+$$('.view-toggle button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+
+// Approximate points share a neighborhood center; spread them a little so each can be clicked.
+function jitter(id) {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return [((h & 0xffff) / 0xffff - 0.5) * 0.004, (((h >>> 16) & 0xffff) / 0xffff - 0.5) * 0.004];
+}
+
+function popupHtml(l) {
+  const areaLabel = l.neighborhood ?? meta.areas.find((a) => a.id === l.area)?.name;
+  const place = [l.street && `${l.street}${l.houseNumber ? ` ${l.houseNumber}` : ''}`, areaLabel].filter(Boolean).join(', ');
+  const facts = [l.rooms && `${l.rooms} חד׳`, l.sizeSqm && `${l.sizeSqm} מ״ר`, l.floor != null && `קומה ${l.floor}`].filter(Boolean).join(' · ');
+  const approx = l.geoPrecision === 'neighborhood' || l.geoPrecision === 'area';
+  return `<div class="popup" dir="rtl">
+    <strong>${fmtPrice(l.price)}</strong> <span class="muted">· ${esc(l.sourceName ?? SOURCE_LABELS[l.source] ?? l.source)}</span>
+    <div>${esc(place || l.title || '')}</div>
+    ${facts ? `<div class="muted">${esc(facts)}</div>` : ''}
+    ${approx ? '<div class="muted">📍 מיקום משוער</div>' : ''}
+    <a href="${esc(l.url)}" target="_blank" rel="noopener">למודעה ↗</a>
+  </div>`;
+}
+
+function renderMap(items) {
+  if (!window.L) {
+    $('#map').textContent = 'טעינת המפה נכשלה.';
+    return;
+  }
+  if (!map) {
+    map = L.map('map', { center: [32.08, 34.785], zoom: 13 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(map);
+    markers = L.layerGroup().addTo(map);
+  }
+  requestAnimationFrame(() => map.invalidateSize());
+  markers.clearLayers();
+  const points = [];
+  let missing = 0;
+  for (const l of items) {
+    if (l.lat == null || l.lng == null) {
+      missing++;
+      continue;
+    }
+    const approx = l.geoPrecision === 'neighborhood' || l.geoPrecision === 'area';
+    const [dLat, dLng] = approx ? jitter(l.id) : [0, 0];
+    const latlng = [l.lat + dLat, l.lng + dLng];
+    const color = SOURCE_COLORS[l.source] ?? '#555';
+    L.circleMarker(latlng, approx
+      ? { radius: 9, color, weight: 1.5, dashArray: '3 3', fillColor: color, fillOpacity: 0.2 }
+      : { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 })
+      .bindPopup(popupHtml(l))
+      .addTo(markers);
+    points.push(latlng);
+  }
+  const sources = [...new Set(items.filter((l) => l.lat != null).map((l) => l.source))];
+  $('#map-sources').innerHTML = sources
+    .map((src) => `<span class="dot" style="background:${SOURCE_COLORS[src] ?? '#555'}"></span>${esc(SOURCE_LABELS[src] ?? src)}`)
+    .join(' ');
+  $('#map-missing').textContent = missing ? ` · ${missing} מודעות בלי מיקום לא מוצגות` : '';
+  // Re-fit only when the result set changes, not on every refresh.
+  const key = items.map((l) => l.id).join(',');
+  if (points.length && key !== fittedFor) {
+    map.fitBounds(points, { padding: [30, 30], maxZoom: 15 });
+    fittedFor = key;
   }
 }
 
@@ -384,6 +480,10 @@ async function loadSources() {
   const s = await api('/api/settings/sources');
   const form = $('#sources-form');
   form.yad2.checked = s.yad2.enabled;
+  for (const key of Object.keys(meta.sites)) {
+    form[`site-${key}`].checked = s[key]?.enabled ?? false;
+    form[`site-url-${key}`].value = s[key]?.url ?? '';
+  }
   form.telegram.checked = s.telegram.enabled;
   form.facebook.checked = s.facebook.enabled;
   form.telegramChats.value = s.telegram.chats.join('\n');
@@ -398,6 +498,9 @@ $('#sources-form').addEventListener('submit', async (e) => {
       method: 'PUT',
       body: {
         yad2: { enabled: form.yad2.checked },
+        ...Object.fromEntries(
+          Object.keys(meta.sites).map((key) => [key, { enabled: form[`site-${key}`].checked, url: form[`site-url-${key}`].value }]),
+        ),
         telegram: { enabled: form.telegram.checked, chats: form.telegramChats.value },
         facebook: { enabled: form.facebook.checked, groups: form.facebookGroups.value },
       },
@@ -472,10 +575,27 @@ function showTab(name) {
 }
 $$('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
 
+function renderSiteSources() {
+  $('#site-sources').innerHTML = Object.entries(meta.sites)
+    .map(
+      ([key, site]) => `
+    <fieldset>
+      <legend><label><input type="checkbox" name="site-${key}"> ${esc(site.label)}</label></legend>
+      <label class="block">כתובת עמוד החיפוש
+        <input name="site-url-${key}" type="url" dir="ltr" placeholder="${esc(site.defaultUrl)}">
+      </label>
+      <p class="muted">היכנסו ל${esc(site.label)}, סננו דירות להשכרה בתל אביב (ומחיר/חדרים אם רוצים), והדביקו כאן את הכתובת משורת הכתובת. בלי כתובת נסרק עמוד ברירת המחדל.</p>
+    </fieldset>`,
+    )
+    .join('');
+}
+
 // ---------- start
 if (matchMedia('(max-width: 900px)').matches) $('.filters-panel').classList.add('collapsed');
 await refreshMeta();
+renderSiteSources();
 renderFilterForm($('#listing-filters'), currentFilters);
+setView(currentView);
 await loadSearches();
 await loadListings();
 setInterval(async () => {
