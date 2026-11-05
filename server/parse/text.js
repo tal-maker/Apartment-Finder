@@ -217,6 +217,8 @@ export function parseRentalText(text, { reference = new Date() } = {}) {
     entryDate: extractEntryDate(t, reference),
     condition: extractCondition(t),
     mamad: flag(t, 'ממ"ד|ממ״ד|ממד\\b|מרחב מוגן|חדר ביטחון|חדר בטחון'),
+    shelter: flag(t, 'מקלט'),
+    aircon: flag(t, 'מזגן|מזגנים|מיזוג|מזג"א|מזג״א|מיני מרכזי|air.?condition'),
     parking: flag(t, 'חני(?:י)?ה|חניית|מקום חניה|parking', { negativeExtra: 'חני(?:י)?ה (?:ברחוב|בכחול לבן|ציבורית)' }),
     storage: flag(t, 'מחסן'),
     elevator: flag(t, 'מעלית'),

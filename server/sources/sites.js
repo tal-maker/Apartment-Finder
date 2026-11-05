@@ -90,7 +90,9 @@ function imagesOf(o) {
 }
 
 const AMENITY_KEYS = {
-  mamad: /secure|mamad|safe.?room|shelter|ממ"?ד/i,
+  mamad: /secure|mamad|safe.?room|ממ"?ד/i,
+  shelter: /shelter|bomb|מקלט/i,
+  aircon: /air.?cond|מזגן|מיזוג/i,
   parking: /parking|חני/i,
   storage: /storage|warehouse|מחסן/i,
   elevator: /elevator|lift|מעלית/i,
@@ -172,8 +174,7 @@ export function normalizeEmbedded(siteKey, o) {
     houseNumber: address.houseNumber ?? parsed.houseNumber,
     entryDate: firstString(o.entryDate, o.dateOfEntry)?.slice(0, 10) ?? parsed.entryDate,
     condition: conditionOf(o) ?? parsed.condition,
-    mamad: null, parking: null, storage: null, elevator: null, balcony: null, furnished: null, pets: null,
-    ...Object.fromEntries(['mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets'].map((k) => [k, parsed[k]])),
+    ...Object.fromEntries(['mamad', 'shelter', 'parking', 'storage', 'elevator', 'balcony', 'aircon', 'furnished', 'pets'].map((k) => [k, parsed[k] ?? null])),
     ...amenitiesOf(o),
     broker,
     images: imagesOf(o),

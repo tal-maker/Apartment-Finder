@@ -1,7 +1,7 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const FEATURE_LABELS = { mamad: 'ממ"ד', parking: 'חניה', storage: 'מחסן', elevator: 'מעלית', balcony: 'מרפסת', furnished: 'מרוהטת', pets: 'חיות מחמד' };
+const FEATURE_LABELS = { mamad: 'ממ"ד', shelter: 'מקלט', parking: 'חניה', storage: 'מחסן', elevator: 'מעלית', balcony: 'מרפסת', aircon: 'מזגן', furnished: 'מרוהטת', pets: 'חיות מחמד' };
 const CONDITION_LABELS = { new: 'חדשה', renovated: 'משופצת', good: 'במצב שמור', needs_renovation: 'דורשת שיפוץ' };
 const KIND_LABELS = { rent: 'דירה להשכרה', roommate: 'שותפים', sublet: 'סאבלט', seeking: 'מחפשים דירה', sale: 'מכירה', other: 'אחר' };
 const SOURCE_LABELS = { yad2: 'יד2', madlan: 'מדלן', komo: 'קומו', homeless: 'הומלס', facebook: 'פייסבוק', telegram: 'טלגרם' };

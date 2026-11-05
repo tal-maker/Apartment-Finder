@@ -2,7 +2,7 @@
 // filter on a field the listing doesn't state passes by default and the field is
 // reported in `unknown`; `strictUnknown` makes those listings fail instead.
 
-export const FEATURES = ['mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets'];
+export const FEATURES = ['mamad', 'shelter', 'parking', 'storage', 'elevator', 'balcony', 'aircon', 'furnished', 'pets'];
 
 export const DEFAULT_FILTERS = {
   areas: [],

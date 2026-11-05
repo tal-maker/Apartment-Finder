@@ -119,9 +119,11 @@ export function createApp({ store, scanner, notifier }) {
     if (!notifier.configured()) return res.status(400).json({ error: 'ההתראות לא מוגדרות (NOTIFY_PROVIDER). ראו README.' });
     const ids = store.matchedListingIds(search.id);
     const listing = store.listListings({ sinceDays: config.keepDays }).find((l) => ids.has(l.id));
-    const text = listing
-      ? `🧪 הודעת בדיקה\n${formatListingMessage(listing, { searchName: search.name, unknown: matchListing(listing, search.filters).unknown })}`
-      : `🧪 הודעת בדיקה – החיפוש "${search.name}" מחובר. עוד אין דירות שמתאימות לו.`;
+    let text = `🧪 הודעת בדיקה – החיפוש "${search.name}" מחובר. עוד אין דירות שמתאימות לו.`;
+    if (listing) {
+      const message = formatListingMessage(listing, { searchName: search.name, unknown: matchListing(listing, search.filters).unknown });
+      text = { ...message, text: `🧪 הודעת בדיקה\n${message.text}`, html: `🧪 <i>הודעת בדיקה</i>\n${message.html}` };
+    }
     try {
       await notifier.send(text);
       res.json({ ok: true });

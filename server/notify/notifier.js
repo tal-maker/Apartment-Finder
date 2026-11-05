@@ -11,8 +11,25 @@ import { config } from '../config.js';
 import { areaName } from '../neighborhoods.js';
 import { CONDITION_LABELS, KIND_LABELS, SOURCE_LABELS } from '../listing.js';
 
-const FEATURE_LABELS = { mamad: 'ממ"ד', parking: 'חניה', storage: 'מחסן', elevator: 'מעלית', balcony: 'מרפסת', furnished: 'ריהוט', pets: 'בע"ח' };
-const UNKNOWN_LABELS = { ...FEATURE_LABELS, price: 'מחיר', rooms: 'חדרים', area: 'מיקום', size: 'גודל', floor: 'קומה', condition: 'מצב', entryDate: 'תאריך כניסה', broker: 'תיווך' };
+// Order and icons of the features line ("🔑 פיצ׳רים: 🛗 מעלית | ☀️ מרפסת").
+const FEATURES = [
+  ['mamad', '🛡️', 'ממ״ד'],
+  ['shelter', '☢️', 'מקלט'],
+  ['elevator', '🛗', 'מעלית'],
+  ['balcony', '☀️', 'מרפסת'],
+  ['aircon', '❄️', 'מזגן'],
+  ['parking', '🚗', 'חניה'],
+  ['storage', '📦', 'מחסן'],
+  ['furnished', '🛋️', 'מרוהטת'],
+  ['pets', '🐾', 'חיות מחמד'],
+];
+const UNKNOWN_LABELS = {
+  ...Object.fromEntries(FEATURES.map(([key, , label]) => [key, label])),
+  price: 'מחיר', rooms: 'חדרים', area: 'מיקום', size: 'גודל', floor: 'קומה', condition: 'מצב', entryDate: 'תאריך כניסה', broker: 'תיווך',
+};
+// Telegram allows 1024 characters under a photo; longer messages go as text.
+const CAPTION_LIMIT = 1024;
+const DESCRIPTION_LIMIT = 420;
 
 export function notifierConfigured() {
   const w = config.notify;
@@ -27,42 +44,120 @@ export function notifierConfigured() {
 }
 
 const fmtPrice = (n) => `${Number(n).toLocaleString('en-US')} ₪`;
-const fmtDate = (d) => (d === 'immediate' ? 'מיידית' : d ? d.split('-').reverse().join('/') : null);
+// 2026-12-01 → 1.12.2026
+const fmtDate = (d) => {
+  if (d === 'immediate') return 'מיידית';
+  const m = String(d ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${Number(m[3])}.${Number(m[2])}.${m[1]}` : d;
+};
+const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+export function mapsUrl(listing) {
+  if (listing.lat != null && listing.lng != null && listing.geoPrecision === 'exact') {
+    return `https://maps.google.com/?q=${listing.lat},${listing.lng}`;
+  }
+  const address = [listing.street, listing.houseNumber, 'תל אביב'].filter(Boolean).join(' ');
+  return `https://maps.google.com/?q=${encodeURIComponent(address)}`;
+}
+
+function description(text, limit) {
+  const cleaned = String(text ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return cleaned.length > limit ? `${cleaned.slice(0, limit - 3).trimEnd()}...` : cleaned;
+}
+
+// Builds the alert in two forms: `html` for Telegram (bold labels, linked address,
+// sent with the listing's photos) and `text` for WhatsApp.
 export function formatListingMessage(listing, { searchName, unknown = [] } = {}) {
-  const lines = [`🏠 *דירה חדשה* – ${searchName ?? 'התאמה'}`];
-  const place = [listing.street && `${listing.street}${listing.houseNumber ? ` ${listing.houseNumber}` : ''}`, listing.neighborhood ?? (listing.area && areaName(listing.area))]
+  const lines = []; // [plain, html]
+  const add = (plain, html = escapeHtml(plain)) => lines.push([plain, html]);
+  const field = (icon, label, value) => add(`${icon} ${label}: ${value}`, `${icon} <b>${label}:</b> ${escapeHtml(value)}`);
+
+  const rooms = listing.rooms == null ? 'דירה' : listing.rooms === 1 ? 'חדר אחד' : `${listing.rooms} חדרים`;
+  const kind = listing.kind && listing.kind !== 'rent' ? ` (${KIND_LABELS[listing.kind]})` : '';
+  const place = [listing.neighborhood ?? (listing.area ? areaName(listing.area) : null), listing.city === 'other' ? null : 'תל אביב']
     .filter(Boolean)
     .join(', ');
-  if (place) lines.push(`📍 ${place}`);
-  const facts = [
-    listing.price && `💰 ${fmtPrice(listing.price)}`,
-    listing.rooms && `🛏 ${listing.rooms} חד׳`,
-    listing.sizeSqm && `📐 ${listing.sizeSqm} מ״ר`,
-    listing.floor != null && `🏢 קומה ${listing.floor}`,
-  ].filter(Boolean);
-  if (facts.length) lines.push(facts.join(' · '));
-  const features = Object.entries(FEATURE_LABELS)
-    .filter(([key]) => listing[key] != null)
-    .map(([key, label]) => `${listing[key] ? '✅' : '❌'} ${label}`);
-  if (features.length) lines.push(features.join('  '));
-  const extra = [
-    listing.condition && `🔨 ${CONDITION_LABELS[listing.condition]}`,
-    listing.entryDate && `📅 כניסה: ${fmtDate(listing.entryDate)}`,
-    listing.broker != null && (listing.broker ? '🤝 תיווך' : '👤 ללא תיווך'),
-    listing.kind && listing.kind !== 'rent' && `🏷 ${KIND_LABELS[listing.kind]}`,
-  ].filter(Boolean);
-  if (extra.length) lines.push(extra.join(' · '));
-  const missing = unknown.filter((u) => UNKNOWN_LABELS[u]).map((u) => UNKNOWN_LABELS[u]);
-  if (missing.length) lines.push(`❔ לא צוין במודעה: ${missing.join(', ')}`);
-  if (listing.source !== 'yad2' && listing.text) {
-    const snippet = listing.text.replace(/\s+/g, ' ').trim();
-    lines.push(`📝 ${snippet.length > 220 ? `${snippet.slice(0, 217)}…` : snippet}`);
+  const title = `${rooms}${kind}${place ? ` · ${place}` : ''}`;
+  add(`🏠 *${title}*`, `🏠 <b>${escapeHtml(title)}</b>`);
+
+  if (listing.street) {
+    const address = `${listing.street}${listing.houseNumber ? ` ${listing.houseNumber}` : ''}`;
+    add(`📍 ${address}`, `📍 <a href="${escapeHtml(mapsUrl(listing))}">${escapeHtml(address)}</a>`);
   }
-  if (listing.contact) lines.push(`📞 ${listing.contact}`);
-  lines.push(`מקור: ${listing.sourceName ?? SOURCE_LABELS[listing.source] ?? listing.source}`);
-  lines.push(listing.url);
-  return lines.join('\n');
+  field('💰', 'מחיר', listing.price ? fmtPrice(listing.price) : 'לא צוין');
+  if (listing.sizeSqm) field('📏', 'שטח', `${listing.sizeSqm} מ״ר`);
+  if (listing.floor != null) field('🏢', 'קומה', listing.floor === 0 ? 'קרקע' : String(listing.floor));
+  if (listing.entryDate) field('📅', 'כניסה', fmtDate(listing.entryDate));
+  if (listing.condition) field('🔨', 'מצב', CONDITION_LABELS[listing.condition]);
+  if (listing.broker != null) field('🤝', 'תיווך', listing.broker ? 'כן' : 'ללא תיווך');
+
+  const has = FEATURES.filter(([key]) => listing[key] === true);
+  if (has.length) {
+    const list = has.map(([, icon, label]) => `${icon} ${label}`).join(' | ');
+    add(`🔑 פיצ׳רים: ${list}`, `🔑 <b>פיצ׳רים:</b> ${escapeHtml(list)}`);
+  }
+  const without = FEATURES.filter(([key]) => listing[key] === false).map(([, , label]) => label);
+  if (without.length) field('🚫', 'אין', without.join(', '));
+  const missing = unknown.filter((u) => UNKNOWN_LABELS[u]).map((u) => UNKNOWN_LABELS[u]);
+  if (missing.length) field('❔', 'לא צוין במודעה', missing.join(', '));
+
+  const footer = [];
+  const sourceLabel = listing.sourceName ?? SOURCE_LABELS[listing.source] ?? listing.source;
+  footer.push([`🔗 ${listing.url}`, `🔗 <a href="${escapeHtml(listing.url)}">למודעה · ${escapeHtml(sourceLabel)}</a>`]);
+  if (listing.contact) footer.push([`📞 ${listing.contact}`, `📞 ${escapeHtml(listing.contact)}`]);
+  if (searchName) footer.push([`🔔 ${searchName}`, `🔔 ${escapeHtml(searchName)}`]);
+
+  // The description gets whatever room is left under the photos.
+  const used = [...lines, ...footer].reduce((n, [plain]) => n + plain.length + 1, 0) + 4;
+  const body = description(listing.text, Math.max(120, Math.min(DESCRIPTION_LIMIT, CAPTION_LIMIT - used - 3)));
+  const blocks = [lines, body ? [[`📝 ${body}`, `📝 ${escapeHtml(body)}`]] : [], footer].filter((b) => b.length);
+  const join = (i) => blocks.map((b) => b.map((l) => l[i]).join('\n')).join('\n\n');
+
+  return {
+    text: join(0),
+    html: join(1),
+    images: (listing.images ?? []).filter((u) => /^https?:\/\//.test(u)).slice(0, 5),
+  };
+}
+
+// Plain strings (test messages, "more matches") are sent as-is.
+export function toMessage(message) {
+  if (typeof message === 'string') return { text: message, html: escapeHtml(message), images: [] };
+  return message;
+}
+
+async function telegram(method, body) {
+  const res = await fetch(`https://api.telegram.org/bot${config.notify.telegramBotToken}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!data.ok) throw new Error(`Telegram bot: ${data.description ?? `HTTP ${res.status}`}`);
+}
+
+// Photos first (an album, like a listing card) with the details as the caption.
+// If Telegram can't fetch the photos, or the text is too long for a caption, the
+// details go in a separate text message.
+export async function sendTelegram(chatId, message, call = telegram) {
+  const { html, text, images = [] } = message;
+  const sendText = () => call('sendMessage', { chat_id: chatId, text: html, parse_mode: 'HTML', link_preview_options: { is_disabled: images.length > 0 } });
+  if (!images.length) return sendText();
+  const fits = text.length <= CAPTION_LIMIT;
+  const caption = fits ? { caption: html, parse_mode: 'HTML' } : {};
+  try {
+    if (images.length === 1) await call('sendPhoto', { chat_id: chatId, photo: images[0], ...caption });
+    else await call('sendMediaGroup', { chat_id: chatId, media: images.map((url, i) => ({ type: 'photo', media: url, ...(i === 0 ? caption : {}) })) });
+  } catch {
+    return sendText();
+  }
+  if (!fits) await sendText();
 }
 
 async function postForm(url, body, auth) {
@@ -75,30 +170,16 @@ async function postForm(url, body, auth) {
   if (!res.ok) throw new Error(`Twilio HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
-const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-// The message uses WhatsApp's *bold*; Telegram gets the same text as HTML.
-export function toTelegramHtml(text) {
-  return escapeHtml(text).replace(/\*([^*\n]+)\*/, '<b>$1</b>');
-}
-
-async function sendOne(text) {
+async function sendOne(input) {
+  const message = toMessage(input);
+  const { text } = message;
   const w = config.notify;
   switch (w.provider) {
     case 'console':
       console.log(`[alert]\n${text}\n`);
       return;
     case 'telegram':
-      for (const chatId of w.telegramChatIds) {
-        const res = await fetch(`https://api.telegram.org/bot${w.telegramBotToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: toTelegramHtml(text), parse_mode: 'HTML' }),
-          signal: AbortSignal.timeout(20000),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!body.ok) throw new Error(`Telegram bot: ${body.description ?? `HTTP ${res.status}`}`);
-      }
+      for (const chatId of w.telegramChatIds) await sendTelegram(chatId, message);
       return;
     case 'callmebot':
       for (const recipient of w.callmebotRecipients) {
@@ -151,9 +232,9 @@ export function createNotifier({ send = sendOne, delayMs = config.notify.provide
   let queue = Promise.resolve();
   return {
     configured: () => notifierConfigured() || send !== sendOne,
-    send(text) {
+    send(message) {
       const task = queue.then(async () => {
-        await send(text);
+        await send(message);
         await new Promise((r) => setTimeout(r, delayMs));
       });
       queue = task.catch(() => {});

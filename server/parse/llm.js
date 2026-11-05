@@ -11,7 +11,7 @@ const SCHEMA = {
   additionalProperties: false,
   required: [
     'kind', 'price', 'rooms', 'sizeSqm', 'floor', 'neighborhood', 'isTelAviv', 'street', 'houseNumber',
-    'entryDate', 'condition', 'mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets', 'broker',
+    'entryDate', 'condition', 'mamad', 'shelter', 'parking', 'storage', 'elevator', 'balcony', 'aircon', 'furnished', 'pets', 'broker',
   ],
   properties: {
     kind: { type: 'string', enum: ['rent', 'roommate', 'sublet', 'seeking', 'sale', 'other'] },
@@ -26,6 +26,8 @@ const SCHEMA = {
     entryDate: nullable('string'),
     condition: nullable('string', { enum: ['new', 'renovated', 'good', 'needs_renovation'] }),
     mamad: nullable('boolean'),
+    shelter: nullable('boolean'),
+    aircon: nullable('boolean'),
     parking: nullable('boolean'),
     storage: nullable('boolean'),
     elevator: nullable('boolean'),
@@ -45,7 +47,7 @@ Return null for anything the post does not state; never guess.
 - neighborhood: if the location is in Tel Aviv-Yafo, pick the closest name from this list: ${NEIGHBORHOOD_NAMES}. Otherwise give the place as written.
 - isTelAviv: false when the apartment is clearly in another city (Ramat Gan, Givatayim, Bat Yam...).
 - entryDate: "immediate" for immediate entry, otherwise an ISO date (YYYY-MM-DD) relative to the post date.
-- mamad: has a ממ"ד / protected room. broker: true if offered through a broker/agency (תיווך), false if explicitly without a broker or directly from the owner.`;
+- mamad: has a ממ"ד / protected room in the apartment. shelter: the building has a shelter (מקלט). aircon: has air conditioning. broker: true if offered through a broker/agency (תיווך), false if explicitly without a broker or directly from the owner.`;
 
 let client;
 

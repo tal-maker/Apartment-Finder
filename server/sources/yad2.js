@@ -123,6 +123,8 @@ export function normalizeFeedItem(item) {
     balcony: tagFlags.balcony ?? null,
     furnished: tagFlags.furnished ?? null,
     pets: tagFlags.pets ?? null,
+    shelter: tagFlags.shelter ?? null,
+    aircon: tagFlags.aircon ?? null,
     broker: item.adType ? item.adType !== 'private' : item.customer?.agencyName ? true : null,
     images: [meta.coverImage, ...(meta.images ?? [])].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 6),
     sourceName: 'יד2',
@@ -171,6 +173,8 @@ function normalizeLegacyItem(item) {
     balcony: flags.balcony,
     furnished: flags.furnished,
     pets: flags.pets,
+    shelter: flags.shelter,
+    aircon: flags.aircon,
     broker: item.merchant != null ? Boolean(item.merchant) : item.feed_source ? item.feed_source !== 'private' : null,
     images: Object.values(item.images ?? {}).map((i) => i?.src ?? i).filter((v) => typeof v === 'string').slice(0, 6),
     sourceName: 'יד2',
@@ -205,6 +209,7 @@ export function parseSearchPage(html) {
 // Item pages keep amenities as booleans named include*, usually under `inProperty`.
 const BOOL_KEYS = {
   mamad: ['includeSecurityRoom', 'includeMamad'],
+  aircon: ['includeAirconditioner', 'includeAirConditioner'],
   parking: ['includeParking', 'parkingSpacesCount'],
   storage: ['includeWarehouse', 'includeStorage'],
   elevator: ['includeElevator'],

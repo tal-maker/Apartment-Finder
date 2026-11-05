@@ -6,6 +6,7 @@ const LISTING_FIELDS = [
   'source', 'external_id', 'url', 'title', 'text', 'kind', 'price', 'rooms', 'size_sqm', 'floor',
   'neighborhood', 'area', 'city', 'street', 'house_number', 'entry_date', 'condition',
   'mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets', 'broker',
+  'shelter', 'aircon',
   'images', 'contact', 'author', 'source_name', 'posted_at', 'fingerprint', 'raw',
   'lat', 'lng', 'geo_precision',
 ];
@@ -17,7 +18,7 @@ const CAMEL = {
   source_name: 'sourceName', posted_at: 'postedAt', first_seen_at: 'firstSeenAt', updated_at: 'updatedAt',
   user_status: 'userStatus', geo_precision: 'geoPrecision',
 };
-const BOOLEANS = ['mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets', 'broker'];
+const BOOLEANS = ['mamad', 'parking', 'storage', 'elevator', 'balcony', 'furnished', 'pets', 'broker', 'shelter', 'aircon'];
 
 const toBool = (v) => (v == null ? null : Boolean(v));
 const fromBool = (v) => (v == null ? null : v ? 1 : 0);

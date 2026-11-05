@@ -35,8 +35,8 @@ test('first scan is a silent baseline, later new matches alert once', async () =
   const result = await scanner.scan();
   assert.equal(result.newListings, 2);
   assert.equal(sent.length, 1);
-  assert.match(sent[0], /צפון/);
-  assert.match(sent[0], /7,500/);
+  assert.match(sent[0].text, /צפון/);
+  assert.match(sent[0].text, /7,500/);
 
   await scanner.scan();
   assert.equal(sent.length, 1);
