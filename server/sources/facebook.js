@@ -105,16 +105,23 @@ export function groupSearchUrl(groupUrl, text) {
 
 // Facebook fills in a post's link (the timestamp) only when the mouse is over it.
 export async function revealPermalinks(page) {
-  const anchors = await page.locator('div[role="feed"] a[role="link"]:not([href*="/posts/"]):not([href*="/user/"])').all();
-  for (const anchor of anchors.slice(0, 80)) {
-    const href = (await anchor.getAttribute('href').catch(() => null)) ?? '';
-    if (href && href !== '#' && !href.startsWith('#') && !/__cft__|__tn__/.test(href)) continue;
-    await anchor.hover({ timeout: 800 }).catch(() => {});
-  }
-  await page.waitForTimeout(500);
+  // Fast pass: the same events a mouse would send, for all links at once.
+  await page.evaluate(() => {
+    for (const a of document.querySelectorAll('div[role="feed"] a[role="link"]')) {
+      const href = a.getAttribute('href') ?? '';
+      if (href && href !== '#' && !href.startsWith('#')) continue;
+      for (const type of ['mouseover', 'mouseenter', 'focusin']) a.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+      a.focus({ preventScroll: true });
+    }
+  });
+  await page.waitForTimeout(400);
+  // Real hovers only for the links still empty, and only a few.
+  const empty = await page.locator('div[role="feed"] a[role="link"][href="#"], div[role="feed"] a[role="link"]:not([href])').all();
+  for (const anchor of empty.slice(0, 25)) await anchor.hover({ timeout: 300 }).catch(() => {});
+  await page.waitForTimeout(300);
 }
 
-export async function fetchFacebook(groups) {
+export async function fetchFacebook(groups, { log = console } = {}) {
   if (!facebookConfigured()) {
     throw new Error('Not logged in to Facebook. Stop the app and run `npm run facebook:login`.');
   }
@@ -122,8 +129,11 @@ export async function fetchFacebook(groups) {
   try {
     const posts = [];
     const errors = [];
-    for (const group of groups) {
+    log.log(`[facebook] reading ${groups.length} groups…`);
+    for (const [index, group] of groups.entries()) {
       const url = groupFeedUrl(group);
+      const startedAt = Date.now();
+      const before = posts.length;
       const page = await context.newPage();
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -159,6 +169,7 @@ export async function fetchFacebook(groups) {
         errors.push(`${group}: ${err.message}`);
       } finally {
         await page.close();
+        log.log(`[facebook] ${index + 1}/${groups.length} ${group}: ${posts.length - before} posts, ${Math.round((Date.now() - startedAt) / 1000)}s`);
       }
       await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
     }

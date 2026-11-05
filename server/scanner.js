@@ -119,6 +119,7 @@ export class Scanner {
           }
         }
         this.store.finishRun(runId, { ok: true, found: items.length, newCount, error: errors.length ? errors.join('; ') : null });
+        this.log.log(`[${source}] found ${items.length}, new ${newCount}${errors.length ? ` (${errors.length} errors)` : ''}`);
       } catch (err) {
         this.log.error(`[${source}]`, err.message);
         this.store.finishRun(runId, { ok: false, error: err.message });

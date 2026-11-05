@@ -524,7 +524,10 @@ function renderStatus() {
     [meta.notify.configured, `התראות: ${meta.notify.configured ? `מוגדרות (${PROVIDER_LABELS[meta.notify.provider] ?? meta.notify.provider})` : 'לא מוגדרות – לא יישלחו הודעות'}`],
     [meta.llm.enabled, `ניתוח מודעות טקסט עם Claude: ${meta.llm.enabled ? 'פעיל' : 'כבוי (משתמש בזיהוי לפי ביטויים)'}`],
     [true, `סריקה כל ${meta.intervalMinutes} דקות${meta.mock ? ' · מצב דמו (MOCK_SOURCES)' : ''}`],
-    ...meta.lastRuns.map((r) => [r.ok, `${SOURCE_LABELS[r.source] ?? r.source}: ${r.ok ? `תקין, ${timeAgo(r.finishedAt)}` : `שגיאה – ${r.error}`}`]),
+    ...meta.lastRuns.map((r) => [
+      r.ok !== false,
+      `${SOURCE_LABELS[r.source] ?? r.source}: ${r.ok == null ? 'נסרק עכשיו…' : r.ok ? `תקין, ${timeAgo(r.finishedAt)}` : `שגיאה – ${r.error}`}`,
+    ]),
   ];
   $('#status-list').innerHTML = items.map(([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}">${esc(text)}</li>`).join('');
   $$('.interval').forEach((el) => (el.textContent = meta.intervalMinutes));
@@ -538,7 +541,7 @@ async function loadRuns() {
   $('#runs tbody').innerHTML = runs
     .map(
       (r) => `<tr class="${r.ok === false ? 'bad' : ''}"><td>${SOURCE_LABELS[r.source] ?? r.source}</td><td>${new Date(r.startedAt).toLocaleString('he-IL')}</td>
-      <td>${r.found ?? ''}</td><td>${r.newCount ?? ''}</td><td class="err">${esc(r.error ?? '')}</td></tr>`,
+      <td>${r.found ?? ''}</td><td>${r.newCount ?? ''}</td><td class="err">${esc(r.ok == null ? 'נסרק עכשיו…' : r.error ?? '')}</td></tr>`,
     )
     .join('');
 }

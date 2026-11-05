@@ -271,6 +271,13 @@ export class Store {
       .run(new Date().toISOString(), ok ? 1 : 0, found, newCount, error, id);
   }
 
+  // Runs still open from a previous process were cut off when it stopped.
+  markInterruptedRuns() {
+    return this.db
+      .prepare("UPDATE scan_runs SET finished_at = ?, ok = 0, error = 'הסריקה הופסקה באמצע: האפליקציה נסגרה או הופעלה מחדש לפני שהסתיימה' WHERE finished_at IS NULL")
+      .run(new Date().toISOString()).changes;
+  }
+
   recentRuns(limit = 30) {
     return this.db
       .prepare('SELECT * FROM scan_runs ORDER BY id DESC LIMIT ?')

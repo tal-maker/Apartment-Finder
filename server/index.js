@@ -7,6 +7,7 @@ import { createNotifier } from './notify/notifier.js';
 import { createGeocoder } from './geocode.js';
 
 const store = openDb(path.join(config.dataDir, 'apartments.db'));
+store.markInterruptedRuns();
 const notifier = createNotifier();
 const geocoder = createGeocoder({ store });
 const scanner = new Scanner({ store, notifier, geocoder });
