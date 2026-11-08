@@ -173,6 +173,23 @@ function readFilterForm(root) {
 }
 
 // ---------- listings
+// Google Maps for the listing: exact coordinates when known, otherwise the street
+// address, otherwise the neighborhood. Same rule as the address link in alerts.
+function mapsHref(l) {
+  if (l.lat != null && l.lng != null && l.geoPrecision === 'exact') return `https://maps.google.com/?q=${l.lat},${l.lng}`;
+  const place = l.street
+    ? [l.street, l.houseNumber].filter(Boolean).join(' ')
+    : l.neighborhood ?? meta.areas.find((a) => a.id === l.area)?.name;
+  return place ? `https://maps.google.com/?q=${encodeURIComponent(`${place} תל אביב`)}` : null;
+}
+
+function mapsButton(l) {
+  const href = mapsHref(l);
+  if (!href) return '';
+  const approx = !l.street && !(l.geoPrecision === 'exact');
+  return `<a class="btn small ghost" href="${esc(href)}" target="_blank" rel="noopener" title="${approx ? 'אין כתובת במודעה – מציג את השכונה' : 'פתיחה ב־Google Maps'}">📍 ${approx ? 'שכונה במפה' : 'מפה'}</a>`;
+}
+
 function listingCard(l) {
   const areaLabel = l.neighborhood ?? meta.areas.find((a) => a.id === l.area)?.name;
   const place = [l.street && `${l.street}${l.houseNumber ? ` ${l.houseNumber}` : ''}`, areaLabel].filter(Boolean).join(', ');
@@ -209,6 +226,7 @@ function listingCard(l) {
         ${l.contact ? `<p class="contact">📞 <a href="tel:${esc(l.contact)}">${esc(l.contact)}</a></p>` : ''}
         <div class="card-actions">
           <a class="btn small primary" href="${esc(l.url)}" target="_blank" rel="noopener">למודעה ↗</a>
+          ${mapsButton(l)}
           <button class="btn small ghost" data-action="favorite">${l.userStatus === 'favorite' ? '★ במועדפים' : '☆ מועדף'}</button>
           <button class="btn small ghost" data-action="hide">${l.userStatus === 'hidden' ? 'החזר' : 'הסתר'}</button>
           <span class="muted when">${timeAgo(l.firstSeenAt)}</span>
@@ -292,6 +310,7 @@ function popupHtml(l) {
     ${facts ? `<div class="muted">${esc(facts)}</div>` : ''}
     ${approx ? '<div class="muted">📍 מיקום משוער</div>' : ''}
     <a href="${esc(l.url)}" target="_blank" rel="noopener">למודעה ↗</a>
+    ${mapsHref(l) ? ` · <a href="${esc(mapsHref(l))}" target="_blank" rel="noopener">Google Maps</a>` : ''}
   </div>`;
 }
 
