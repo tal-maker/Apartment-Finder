@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { openDb } from '../server/db.js';
 import { config } from '../server/config.js';
 import { createBot } from '../server/bot.js';
-import { addPerson, personKey } from '../server/notify/telegram-link.js';
+import { addPerson, listPeople, personKey } from '../server/notify/telegram-link.js';
 
 config.notify.provider = 'telegram';
 config.notify.telegramBotToken = 'x';
@@ -91,4 +91,17 @@ test('my searches: pause and delete only your own; strangers are turned away', a
   await stranger.say('/start');
   assert.match(stranger.last().text, /בוט פרטי/);
   assert.equal(stranger.store.listSearches().length, 0);
+});
+
+test("the admin opening a friend's invite link is not linked to the friend", async () => {
+  const { store, call, sent } = setup();
+  const { url } = await addPerson(store, 'דני', call);
+  const bot = createBot({ store, scanner: { backfill() {} }, call, log: { log() {}, warn() {}, error() {} } });
+  // Chat 111 is the admin's (TELEGRAM_ALERT_CHAT_IDS).
+  const admin = { id: 111, type: 'private', first_name: 'טל' };
+  await bot.handleUpdate({ update_id: 1, message: { text: `/start ${url.split('start=')[1]}`, chat: admin, from: admin } });
+  assert.match(sent.filter((m) => m.method === 'sendMessage').at(-1).text, /הקישור הזה מיועד לדני/);
+  assert.deepEqual(store.getSetting(`telegram:${personKey('דני')}`, []), []);
+  // The link still works when the friend opens it.
+  assert.equal((await listPeople(store, call))[0].connected, false);
 });

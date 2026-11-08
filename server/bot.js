@@ -8,7 +8,7 @@ import { config } from './config.js';
 import { AREAS } from './neighborhoods.js';
 import { normalizeFilters } from './match.js';
 import { formatListingMessage, sendTelegram, telegram } from './notify/notifier.js';
-import { handleStartCode, keyForChat, telegramReady } from './notify/telegram-link.js';
+import { handleStartCode, inviteKey, keyForChat, telegramReady } from './notify/telegram-link.js';
 import { isAdmin, telegramChatsFor } from './users.js';
 
 const FEATURES = [
@@ -298,6 +298,14 @@ export function createBot({ store, scanner, call = telegram, log = console, now 
 
     // Invite links: connect, then go straight to building a search.
     if (message?.text?.startsWith('/start ')) {
+      // A chat that already belongs to someone (e.g. the admin trying a friend's link)
+      // must not be linked to another person too, or it would get their alerts.
+      const forKey = inviteKey(store, message.text);
+      const currentKey = keyForChat(store, chatId, adminChats());
+      if (forKey && currentKey !== undefined && forKey !== currentKey && !(forKey === '@admin' && currentKey === null)) {
+        const forName = forKey.startsWith('person:') ? forKey.slice(7) : forKey;
+        return send(chatId, `⚠️ הקישור הזה מיועד ל${forName}, והטלגרם הזה כבר מחובר ${currentKey === null ? 'אליך (המנהל)' : `ל${currentKey.replace(/^person:/, '')}`}. כדי שההתראות לא יתערבבו – שלחו את הקישור ל${forName} והוא יפתח אותו בטלגרם שלו.`);
+      }
       const connectedKey = await handleStartCode(store, message, call);
       if (connectedKey !== null) {
         log.log?.(`[telegram] connected ${connectedKey}`);

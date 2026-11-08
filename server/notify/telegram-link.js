@@ -48,6 +48,12 @@ export async function startLink(store, key, { ttlMs = SELF_TTL_MS, call = telegr
 // Handles "/start <code>" from someone pressing Start on an invite link: saves
 // their chat under the invite's key. Returns that key, or null if the message
 // wasn't a valid code. The bot (server/bot.js) calls this for every message.
+// The key an invite link was made for (null if the code isn't valid).
+export function inviteKey(store, text) {
+  const code = String(text ?? '').match(/^\/start\s+([0-9a-f]+)/)?.[1];
+  return (code && liveInvites(store)[code]?.key) ?? null;
+}
+
 export async function handleStartCode(store, message, call = telegram) {
   const code = message?.text?.match(/^\/start\s+([0-9a-f]+)/)?.[1];
   if (!code) return null;
