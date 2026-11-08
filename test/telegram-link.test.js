@@ -26,11 +26,11 @@ test('a logged-in user connects their own Telegram', async () => {
   const bot = fakeBot();
   const { code, url } = await startLink(store, 'dani', { call: bot.call });
   assert.equal(url, `https://t.me/tlv_apartments_bot?start=${code}`);
-  assert.deepEqual(await waitForLink(store, code, { key: 'dani', call: bot.call }), { status: 'waiting' });
+  assert.deepEqual(await waitForLink(store, code, { key: 'dani', waitMs: 0 }), { status: 'waiting' });
   bot.updates.push(start('someone-else', 5), start(code, 4242, 'דני'));
-  assert.deepEqual(await waitForLink(store, code, { key: 'dani', call: bot.call }), { status: 'connected' });
+  assert.deepEqual(await checkBot(store, { call: bot.call }), ['dani']);
+  assert.deepEqual(await waitForLink(store, code, { key: 'dani', waitMs: 0 }), { status: 'connected' });
   assert.deepEqual(store.getSetting('telegram:dani'), ['4242']);
-  assert.equal(bot.sent[0].chat_id, 4242);
 });
 
 test('a friend added by name gets a link, presses Start later, and receives their search alerts', async () => {

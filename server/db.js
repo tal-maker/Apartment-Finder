@@ -279,6 +279,13 @@ export class Store {
     return row ? JSON.parse(row.value) : fallback;
   }
 
+  listSettings(prefix) {
+    return this.db
+      .prepare('SELECT key, value FROM settings WHERE key LIKE ?')
+      .all(`${prefix}%`)
+      .map((r) => [r.key, JSON.parse(r.value)]);
+  }
+
   setSetting(key, value) {
     this.db
       .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')

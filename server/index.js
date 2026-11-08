@@ -6,7 +6,7 @@ import { Scanner } from './scanner.js';
 import { createNotifier } from './notify/notifier.js';
 import { createGeocoder } from './geocode.js';
 import { telegramChatsFor, users } from './users.js';
-import { startBackgroundCheck } from './notify/telegram-link.js';
+import { createBot } from './bot.js';
 
 const store = openDb(path.join(config.dataDir, 'apartments.db'));
 store.markInterruptedRuns();
@@ -26,7 +26,8 @@ app.listen(config.port, () => {
   console.log(users.length ? `Users: ${users.map((u) => `${u.name}${u.admin ? ' (admin)' : ''}`).join(', ')}` : 'No users defined: open only on this computer (set APP_USERS to share it)');
   console.log(`Scanning every ${config.scanIntervalMinutes} min · Alerts: ${config.notify.provider || 'off'} · Claude extraction: ${config.llm.enabled ? 'on' : 'off'}`);
   scanner.start();
-  startBackgroundCheck(store);
+  // Telegram conversations: invite links, building searches, "my searches".
+  createBot({ store, scanner }).start();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

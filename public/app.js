@@ -701,7 +701,7 @@ async function loadPeople() {
   box.innerHTML = `
     <div class="people-head">
       <div><strong>👥 מי עוד מקבל התראות</strong>
-        <p class="muted">הוסיפו חבר, שלחו לו את הקישור, והוא לוחץ Start בבוט (פעם אחת). אחר כך צרו חיפוש ובחרו "שלח את ההתראות אל" – השם שלו.</p></div>
+        <p class="muted">הוסיפו חבר ושלחו לו את הקישור. הוא לוחץ Start, עונה בבוט על כמה שאלות (אזור, תקציב, חדרים…) – והחיפוש שלו נוצר לבד. אפשר גם ליצור לו חיפוש כאן ולבחור "שלח את ההתראות אל" – השם שלו.</p></div>
       <form id="add-person" class="row-actions"><input name="name" placeholder="שם, למשל דני" maxlength="40" required><button class="btn primary small">הוסף</button></form>
     </div>
     ${people

@@ -45,27 +45,34 @@ export async function startLink(store, key, { ttlMs = SELF_TTL_MS, call = telegr
   return { code, url: await botLink(code, call) };
 }
 
-// Reads new messages to the bot (one read at a time: Telegram rejects parallel
-// ones) and connects every chat that sent a valid code. Returns the keys connected.
+// Handles "/start <code>" from someone pressing Start on an invite link: saves
+// their chat under the invite's key. Returns that key, or null if the message
+// wasn't a valid code. The bot (server/bot.js) calls this for every message.
+export async function handleStartCode(store, message, call = telegram) {
+  const code = message?.text?.match(/^\/start\s+([0-9a-f]+)/)?.[1];
+  if (!code) return null;
+  const invites = liveInvites(store);
+  const invite = invites[code];
+  if (!invite) return null;
+  const chat = message.chat;
+  const saved = store.getSetting(chatsKey(invite.key), []);
+  store.setSetting(chatsKey(invite.key), [...new Set([...saved, String(chat.id)])]);
+  delete invites[code];
+  store.setSetting(INVITES, invites);
+  return invite.key;
+}
+
+// Reads the bot's new messages once and handles invite codes (tests and the setup
+// flow use this; while the app runs, the bot's own loop reads the messages).
 export function checkBot(store, { call = telegram, timeoutSec = 0 } = {}) {
   const run = async () => {
-    const invites = liveInvites(store);
-    if (!Object.keys(invites).length) return [];
     const updates = await call('getUpdates', { offset, timeout: timeoutSec, allowed_updates: ['message'] });
     const connected = [];
     for (const update of updates) {
       offset = update.update_id + 1;
-      const code = update.message?.text?.match(/^\/start\s+([0-9a-f]+)/)?.[1];
-      const invite = code && invites[code];
-      if (!invite) continue;
-      const chat = update.message.chat;
-      const saved = store.getSetting(chatsKey(invite.key), []);
-      store.setSetting(chatsKey(invite.key), [...new Set([...saved, String(chat.id)])]);
-      delete invites[code];
-      connected.push(invite.key);
-      await call('sendMessage', { chat_id: chat.id, text: '✅ מחובר! כאן יגיעו התראות על דירות חדשות שמתאימות לחיפוש שלך.' }).catch(() => {});
+      const key = await handleStartCode(store, update.message, call);
+      if (key) connected.push(key);
     }
-    store.setSetting(INVITES, invites);
     return connected;
   };
   const result = polling.then(run);
@@ -73,14 +80,32 @@ export function checkBot(store, { call = telegram, timeoutSec = 0 } = {}) {
   return result;
 }
 
-export async function waitForLink(store, code, { key, call = telegram, timeoutSec = 20 } = {}) {
-  const invite = liveInvites(store)[code];
-  if (!invite || (key !== undefined && invite.key !== key)) {
-    // Already used: connected if this key now has a chat.
-    return key !== undefined && store.getSetting(chatsKey(key), []).length ? { status: 'connected' } : { status: 'expired' };
+// The site asks repeatedly while someone connects; the bot's loop does the work.
+export async function waitForLink(store, code, { key, waitMs = 3000 } = {}) {
+  const deadline = Date.now() + waitMs;
+  do {
+    const invite = liveInvites(store)[code];
+    if (!invite || (key !== undefined && invite.key !== key)) {
+      return key !== undefined && store.getSetting(chatsKey(key), []).length ? { status: 'connected' } : { status: 'expired' };
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  } while (Date.now() < deadline);
+  return { status: 'waiting' };
+}
+
+// Which key a chat belongs to: a person added by the admin, a logged-in user, or
+// the admin. Undefined for strangers.
+export function keyForChat(store, chatId, adminChats) {
+  const id = String(chatId);
+  if (adminChats.includes(id)) return null;
+  for (const name of store.getSetting(PEOPLE, [])) {
+    if (store.getSetting(chatsKey(personKey(name)), []).includes(id)) return personKey(name);
   }
-  const connected = await checkBot(store, { call, timeoutSec }).catch(() => []);
-  return connected.includes(invite.key) ? { status: 'connected' } : { status: 'waiting' };
+  for (const [key] of store.listSettings('telegram:')) {
+    const owner = key.slice('telegram:'.length);
+    if (owner !== '@admin' && store.getSetting(key, []).includes(id)) return owner;
+  }
+  return undefined;
 }
 
 // ---------- people the admin sends alerts to (no login of their own)
@@ -109,15 +134,4 @@ export function removePerson(store, name) {
   store.setSetting(PEOPLE, store.getSetting(PEOPLE, []).filter((n) => n !== name));
   store.setSetting(chatsKey(personKey(name)), []);
   store.setSetting(INVITES, Object.fromEntries(Object.entries(liveInvites(store)).filter(([, v]) => v.key !== personKey(name))));
-}
-
-// People often press Start long after getting the link: check every half minute
-// while invites are open.
-export function startBackgroundCheck(store, { intervalMs = 30000, log = console } = {}) {
-  if (!telegramReady()) return null;
-  return setInterval(() => {
-    checkBot(store)
-      .then((keys) => keys.forEach((key) => log.log(`[telegram] connected ${key}`)))
-      .catch(() => {});
-  }, intervalMs).unref?.();
 }
