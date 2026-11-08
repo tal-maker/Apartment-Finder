@@ -104,3 +104,14 @@ test('bare thousands-formatted price and street-only location', () => {
   assert.equal(parse('2 חדרים ברמת גן ברחוב ביאליק 5,000 ₪').city, 'other');
   assert.equal(parse('דירה בשבזי, נווה צדק 9,000 ש"ח').neighborhood, 'נווה צדק');
 });
+
+test('long streets are placed by house number', () => {
+  assert.equal(parse('להשכרה 3 חדרים ברחוב אמיל זולא 12, 8,500 ₪').area, 'old_north');
+  assert.equal(parse('דירת 2.5 חדרים בהירקון 180, 9,000 ש"ח').area, 'old_north');
+  assert.equal(parse('דירת 3 חדרים ברחוב הירקון 40 מול הים 9,500 ₪').area, 'center');
+  assert.equal(parse('דירה בהירקון, 3 חדרים 9,500 ₪').area, null);
+  assert.equal(parse('דירה בהירקון 3 חדרים 9,500 ₪').area, null);
+  assert.equal(parse('דירה בארלוזורוב 150, 3 חדרים 9,000 ₪').area, 'new_north');
+  assert.equal(parse('דירה באבן גבירול 160 3 חדרים 9,500 ₪').area, 'new_north');
+  assert.equal(parse('דירה באבן גבירול 100 3 חדרים 9,500 ₪').area, null);
+});

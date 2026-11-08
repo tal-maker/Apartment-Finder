@@ -104,7 +104,7 @@ export const AREAS = [
 // but not the neighborhood ("3 חדרים בבזל"). Long streets that cross several areas
 // (דיזנגוף, בן יהודה, אבן גבירול, הירקון...) are left out on purpose.
 export const STREETS = {
-  old_north: ['בזל', 'נורדאו', 'שדרות נורדאו', 'ירמיהו', 'זבוטינסקי', 'אוסישקין', 'יהושע בן נון', 'ארנון', 'שלמה המלך', 'דוד המלך', 'מאנה', 'סמטת שלוה', 'ישעיהו', 'ברנדייס הישן'],
+  old_north: ['אמיל זולא', 'שפינוזה', 'בלוך', 'חובבי ציון', 'ארנון', 'בזל', 'נורדאו', 'שדרות נורדאו', 'ירמיהו', 'זבוטינסקי', 'אוסישקין', 'יהושע בן נון', 'ארנון', 'שלמה המלך', 'דוד המלך', 'מאנה', 'סמטת שלוה', 'ישעיהו', 'ברנדייס הישן'],
   new_north: ['יהודה המכבי', 'פנקס', 'ברנדייס', 'ויצמן', 'בני דן', 'ליסין', 'שטרן', 'פיכמן', 'נמיר מרדכי'],
   center: ['אחד העם', 'נחלת בנימין', 'מזאה', 'בלפור', 'יהודה הלוי', 'המלך גורג', 'קינג גורג', 'בוגרשוב', 'טשרניחובסקי', 'ביאליק', 'ברנר', 'מאפו', 'יוסף אליהו', 'נחמני', 'לילינבלום', 'הכובשים', 'פרישמן', 'גורדון', 'מלצט', 'שבזי', 'רוקח', 'שד חן', 'שדרות חן', 'שדרות רוטשילד', 'קלישר', 'בצלאל יפה'],
   south: ['ויטל', 'אברבנאל', 'וולפסון', 'מטלון', 'קומפרט', 'הקישון', 'לוינסקי', 'צלנוב', 'הגדוד העברי', 'ראש פינה', 'פלורנטין', 'שוקן', 'אליפלט'],
@@ -183,6 +183,34 @@ export function findNeighborhood(text) {
   return null;
 }
 
+// Long streets that cross areas: the house number decides. Each entry is
+// [first number of the stretch, area], in order. Without a number they stay unknown.
+// Stretches are approximate, but the borders between them are not near the new north.
+export const STREET_RANGES = {
+  'הירקון': [[1, 'center'], [100, 'old_north']],
+  'בן יהודה': [[1, 'center'], [70, 'old_north']],
+  'דיזנגוף': [[1, 'center'], [100, 'old_north']],
+  'ארלוזורוב': [[1, 'old_north'], [100, 'new_north']],
+  'אבן גבירול': [[1, 'center'], [150, 'new_north']],
+};
+
+function areaByRange(text) {
+  // Punctuation is kept here, so "בהירקון, 3 חדרים" doesn't read as house number 3.
+  const spaced = ` ${String(text).replace(/[\u0591-\u05C7"'`׳״]/g, '').replace(/([,.;:!?()\n])/g, ' $1 ').replace(/\s+/g, ' ')} `;
+  for (const [street, ranges] of Object.entries(STREET_RANGES)) {
+    const name = normalizeHebrew(street).trim();
+    const m = spaced.match(new RegExp(` (?:ב|ל|ו|מ|ש|רחוב |רח |ברחוב |ברח )?${name} (\\d{1,3}) (?!חד|קומה|קומות|מר |מטר)`));
+    if (!m) continue;
+    const n = Number(m[1]);
+    // A number between the stretches above (e.g. אבן גבירול 60-149, where one side is
+    // the old north and the other the new) stays unknown.
+    if (street === 'אבן גבירול' && n >= 60 && n < 150) return null;
+    const area = ranges.filter(([from]) => n >= from).at(-1)?.[1];
+    if (area) return { neighborhood: null, area };
+  }
+  return null;
+}
+
 const STREET_INDEX = Object.entries(STREETS)
   .flatMap(([area, streets]) => streets.map((street) => ({ alias: normalizeHebrew(street), area })))
   .sort((a, b) => b.alias.length - a.alias.length);
@@ -190,6 +218,8 @@ const STREET_INDEX = Object.entries(STREETS)
 // Only used when no neighborhood is named. Returns the area; the neighborhood is left empty.
 export function findAreaByStreet(text) {
   const normalized = normalizeHebrew(text);
+  const ranged = areaByRange(text);
+  if (ranged) return ranged;
   for (const entry of STREET_INDEX) {
     if (containsAlias(normalized, entry.alias) || normalized.includes(` רחוב ${entry.alias.trim()} `) || normalized.includes(` רח ${entry.alias.trim()} `)) {
       return { neighborhood: null, area: entry.area };

@@ -71,6 +71,7 @@ function renderFilterForm(root, filters = {}) {
           .join('')}
       </div>
       <p class="hint">בלי סימון = כל העיר. סימון אזור כולל את כל השכונות שבו.</p>
+      <label class="inline"><input type="checkbox" name="includeUnknownLocation" ${f.includeUnknownLocation ? 'checked' : ''}> כולל מודעות שהמיקום שלהן לא זוהה</label>
     </details>
 
     <details open class="group"><summary>מחיר, חדרים וגודל</summary>
@@ -150,6 +151,7 @@ function readFilterForm(root) {
     priceMin: num('priceMin'),
     priceMax: num('priceMax'),
     includeNoPrice: $('[name="includeNoPrice"]', root).checked,
+    includeUnknownLocation: $('[name="includeUnknownLocation"]', root).checked,
     roomsMin: num('roomsMin'),
     roomsMax: num('roomsMax'),
     sizeMin: num('sizeMin'),
@@ -374,6 +376,7 @@ function describeFilters(f) {
   if (areaNames.length || f.neighborhoods?.length) parts.push([...areaNames, ...f.neighborhoods].join(', '));
   if (f.priceMin || f.priceMax) parts.push(`${f.priceMin ? fmtPrice(f.priceMin) : ''}–${f.priceMax ? fmtPrice(f.priceMax) : ''}`);
   if (f.includeNoPrice) parts.push('כולל בלי מחיר');
+  if (f.includeUnknownLocation && (f.areas?.length || f.neighborhoods?.length)) parts.push('כולל מיקום לא ידוע');
   if (f.roomsMin || f.roomsMax) parts.push(`${f.roomsMin ?? ''}–${f.roomsMax ?? ''} חד׳`);
   if (f.sizeMin) parts.push(`מ־${f.sizeMin} מ״ר`);
   if (f.conditions?.length) parts.push(f.conditions.map((c) => CONDITION_LABELS[c]).join('/'));

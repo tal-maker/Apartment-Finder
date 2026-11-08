@@ -149,7 +149,7 @@ export function normalizeEmbedded(siteKey, o) {
   const otherCity = (address.city && !statesTelAviv) || (!statesTelAviv && mentionsOtherCity(address.text));
   const location = otherCity
     ? null
-    : findNeighborhood(address.neighborhood ?? '') ?? findNeighborhood(address.text) ?? findAreaByStreet(address.street ?? '');
+    : findNeighborhood(address.neighborhood ?? '') ?? findNeighborhood(address.text) ?? findAreaByStreet(`${address.street ?? ''} ${address.houseNumber ?? ''}`);
   const telAviv = !otherCity && (statesTelAviv || Boolean(location));
   const url = typeof o.url === 'string' && o.url.startsWith('http') ? o.url : site.itemUrl(id);
   const broker =

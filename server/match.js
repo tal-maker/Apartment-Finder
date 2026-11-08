@@ -10,6 +10,7 @@ export const DEFAULT_FILTERS = {
   priceMin: null,
   priceMax: null,
   includeNoPrice: false, // posts that don't state a price are hidden unless this is set
+  includeUnknownLocation: false, // with areas chosen, posts with no known location are hidden unless this is set
   roomsMin: null,
   roomsMax: null,
   sizeMin: null,
@@ -60,7 +61,10 @@ export function matchListing(listing, rawFilters, { today = new Date() } = {}) {
   if (f.areas.length || f.neighborhoods.length) {
     const inArea = listing.area && f.areas.includes(listing.area);
     const inNeighborhood = listing.neighborhood && f.neighborhoods.includes(listing.neighborhood);
-    if (!listing.area && !listing.neighborhood) unknown.push('area');
+    if (!listing.area && !listing.neighborhood) {
+      if (f.includeUnknownLocation) unknown.push('area');
+      else failed.push('area');
+    }
     else if (!inArea && !inNeighborhood) failed.push('area');
   }
 

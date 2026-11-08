@@ -53,3 +53,10 @@ test('posts that are not offers never match, even with no kind selected', () => 
   }
   assert.equal(matchListing(base, { kinds: [] }).match, true);
 });
+
+test('with areas chosen, an unknown location is hidden unless asked for', () => {
+  const nowhere = { ...base, area: null, neighborhood: null };
+  assert.equal(matchListing(nowhere, { areas: ['new_north'] }).match, false);
+  assert.equal(matchListing(nowhere, { areas: ['new_north'], includeUnknownLocation: true }).match, true);
+  assert.equal(matchListing(nowhere, {}).match, true);
+});
