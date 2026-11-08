@@ -51,8 +51,10 @@ export function defaultFetchers() {
 }
 
 export class Scanner {
-  constructor({ store, notifier, geocoder = null, fetchers = defaultFetchers(), extract = llmEnabled() ? extractWithLlm : null, log = console }) {
+  // recipientsFor(owner): Telegram chats for a search owner's alerts; null = the default recipients.
+  constructor({ store, notifier, geocoder = null, recipientsFor = () => null, fetchers = defaultFetchers(), extract = llmEnabled() ? extractWithLlm : null, log = console }) {
     this.store = store;
+    this.recipientsFor = recipientsFor;
     this.geocoder = geocoder;
     this.notifier = notifier;
     this.fetchers = fetchers;
@@ -213,18 +215,30 @@ export class Scanner {
 
   async #sendAlerts(alerts) {
     if (!alerts.length || !this.notifier?.configured()) return;
-    const max = config.maxAlertsPerScan;
-    for (const { search, listing, unknown } of alerts.slice(0, max)) {
-      try {
-        await this.notifier.send(formatListingMessage(listing, { searchName: search.name, unknown }));
-        this.store.markNotified(search.id, listing.id);
-      } catch (err) {
-        this.log.error('Alert send failed:', err.message);
-      }
+    // Each user gets their own searches' alerts, up to the per-scan limit.
+    const byOwner = new Map();
+    for (const alert of alerts) {
+      const owner = alert.search.owner ?? null;
+      if (!byOwner.has(owner)) byOwner.set(owner, []);
+      byOwner.get(owner).push(alert);
     }
-    if (alerts.length > max) {
-      const link = config.publicUrl ? `\n${config.publicUrl}` : '';
-      await this.notifier.send(`➕ ועוד ${alerts.length - max} התאמות חדשות – פתחו את האפליקציה כדי לראות את כולן.${link}`).catch(() => {});
+    const max = config.maxAlertsPerScan;
+    for (const [owner, group] of byOwner) {
+      const recipients = this.recipientsFor(owner);
+      if (recipients && !recipients.length) continue; // this user hasn't connected Telegram yet
+      const options = recipients ? { telegramChatIds: recipients } : undefined;
+      for (const { search, listing, unknown } of group.slice(0, max)) {
+        try {
+          await this.notifier.send(formatListingMessage(listing, { searchName: search.name, unknown }), options);
+          this.store.markNotified(search.id, listing.id);
+        } catch (err) {
+          this.log.error('Alert send failed:', err.message);
+        }
+      }
+      if (group.length > max) {
+        const link = config.publicUrl ? `\n${config.publicUrl}` : '';
+        await this.notifier.send(`➕ ועוד ${group.length - max} התאמות חדשות – פתחו את האפליקציה כדי לראות את כולן.${link}`, options).catch(() => {});
+      }
     }
   }
 

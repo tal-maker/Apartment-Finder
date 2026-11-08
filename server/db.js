@@ -92,6 +92,15 @@ export function openDb(file) {
     if (!existing.has(field)) db.exec(`ALTER TABLE listings ADD COLUMN ${field} ${columnType(field)}`);
   }
   db.exec('CREATE TABLE IF NOT EXISTS geocache (query TEXT PRIMARY KEY, lat REAL, lng REAL, at TEXT NOT NULL)');
+  // Saved searches belong to a user (null: created before there were users, i.e. the admin).
+  if (!db.prepare('PRAGMA table_info(searches)').all().some((c) => c.name === 'owner')) db.exec('ALTER TABLE searches ADD COLUMN owner TEXT');
+  // Favorites and hidden listings, per user. Older versions kept one status on the
+  // listing itself; those become the admin's.
+  db.exec(`CREATE TABLE IF NOT EXISTS listing_status (
+    user TEXT NOT NULL, listing_id TEXT NOT NULL, status TEXT NOT NULL, PRIMARY KEY (user, listing_id))`);
+  db.exec(`INSERT OR IGNORE INTO listing_status (user, listing_id, status)
+    SELECT '@admin', id, user_status FROM listings WHERE user_status IS NOT NULL;
+    UPDATE listings SET user_status = NULL WHERE user_status IS NOT NULL;`);
   return new Store(db);
 }
 
@@ -143,8 +152,18 @@ export class Store {
       .map(rowToListing);
   }
 
-  setUserStatus(id, status) {
-    this.db.prepare('UPDATE listings SET user_status = ? WHERE id = ?').run(status, id);
+  setUserStatus(user, id, status) {
+    if (status) {
+      this.db
+        .prepare('INSERT INTO listing_status (user, listing_id, status) VALUES (?, ?, ?) ON CONFLICT(user, listing_id) DO UPDATE SET status = excluded.status')
+        .run(user, id, status);
+    } else {
+      this.db.prepare('DELETE FROM listing_status WHERE user = ? AND listing_id = ?').run(user, id);
+    }
+  }
+
+  statusesFor(user) {
+    return new Map(this.db.prepare('SELECT listing_id, status FROM listing_status WHERE user = ?').all(user).map((r) => [r.listing_id, r.status]));
   }
 
   findByFingerprint(fingerprint, excludeId) {
@@ -156,8 +175,11 @@ export class Store {
 
   pruneOlderThan(days) {
     const before = new Date(Date.now() - days * 86400000).toISOString();
-    this.db.prepare("DELETE FROM listings WHERE first_seen_at < ? AND (user_status IS NULL OR user_status != 'favorite')").run(before);
+    this.db
+      .prepare("DELETE FROM listings WHERE first_seen_at < ? AND id NOT IN (SELECT listing_id FROM listing_status WHERE status = 'favorite')")
+      .run(before);
     this.db.prepare('DELETE FROM matches WHERE listing_id NOT IN (SELECT id FROM listings)').run();
+    this.db.prepare('DELETE FROM listing_status WHERE listing_id NOT IN (SELECT id FROM listings)').run();
   }
 
   setLocation(id, { lat, lng, geoPrecision }) {
@@ -187,6 +209,7 @@ export class Store {
   #searchRow = (row) => ({
     id: row.id,
     name: row.name,
+    owner: row.owner ?? null,
     filters: JSON.parse(row.filters),
     notify: Boolean(row.notify),
     active: Boolean(row.active),
@@ -194,10 +217,10 @@ export class Store {
     matchCount: this.db.prepare('SELECT COUNT(*) AS n FROM matches WHERE search_id = ?').get(row.id).n,
   });
 
-  createSearch({ name, filters, notify = true, active = true }) {
+  createSearch({ name, filters, notify = true, active = true, owner = null }) {
     const result = this.db
-      .prepare('INSERT INTO searches (name, filters, notify, active, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(name, JSON.stringify(filters ?? {}), notify ? 1 : 0, active ? 1 : 0, new Date().toISOString());
+      .prepare('INSERT INTO searches (name, filters, notify, active, created_at, owner) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(name, JSON.stringify(filters ?? {}), notify ? 1 : 0, active ? 1 : 0, new Date().toISOString(), owner);
     return this.getSearch(Number(result.lastInsertRowid));
   }
 

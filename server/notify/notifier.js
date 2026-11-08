@@ -131,7 +131,7 @@ export function toMessage(message) {
   return message;
 }
 
-async function telegram(method, body) {
+export async function telegram(method, body) {
   const res = await fetch(`https://api.telegram.org/bot${config.notify.telegramBotToken}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -140,6 +140,7 @@ async function telegram(method, body) {
   });
   const data = await res.json().catch(() => ({}));
   if (!data.ok) throw new Error(`Telegram bot: ${data.description ?? `HTTP ${res.status}`}`);
+  return data.result;
 }
 
 // Photos first (an album, like a listing card) with the details as the caption.
@@ -170,7 +171,7 @@ async function postForm(url, body, auth) {
   if (!res.ok) throw new Error(`Twilio HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
-async function sendOne(input) {
+async function sendOne(input, { telegramChatIds } = {}) {
   const message = toMessage(input);
   const { text } = message;
   const w = config.notify;
@@ -179,7 +180,7 @@ async function sendOne(input) {
       console.log(`[alert]\n${text}\n`);
       return;
     case 'telegram':
-      for (const chatId of w.telegramChatIds) await sendTelegram(chatId, message);
+      for (const chatId of telegramChatIds ?? w.telegramChatIds) await sendTelegram(chatId, message);
       return;
     case 'callmebot':
       for (const recipient of w.callmebotRecipients) {
@@ -232,9 +233,10 @@ export function createNotifier({ send = sendOne, delayMs = config.notify.provide
   let queue = Promise.resolve();
   return {
     configured: () => notifierConfigured() || send !== sendOne,
-    send(message) {
+    // options.telegramChatIds: who gets it (default: TELEGRAM_ALERT_CHAT_IDS).
+    send(message, options) {
       const task = queue.then(async () => {
-        await send(message);
+        await send(message, options);
         await new Promise((r) => setTimeout(r, delayMs));
       });
       queue = task.catch(() => {});

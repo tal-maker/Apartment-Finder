@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -10,18 +9,10 @@ import { sourceSettings } from './scanner.js';
 import { SITES } from './sources/sites.js';
 import { mtprotoConfigured } from './sources/telegram.js';
 import { facebookConfigured } from './sources/facebook.js';
+import { authMiddleware, telegramChatsFor, userKey } from './users.js';
+import { chatsKey, startLink, waitForLink } from './notify/telegram-link.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-
-function basicAuth(user, password) {
-  const expected = Buffer.from(`${user}:${password}`);
-  return (req, res, next) => {
-    const header = req.headers.authorization ?? '';
-    const given = Buffer.from(header.startsWith('Basic ') ? Buffer.from(header.slice(6), 'base64').toString() : '');
-    if (given.length === expected.length && crypto.timingSafeEqual(given, expected)) return next();
-    res.set('WWW-Authenticate', 'Basic realm="apartment-finder"').status(401).send('Authentication required');
-  };
-}
 
 const cleanList = (value) =>
   (Array.isArray(value) ? value : String(value ?? '').split(/[\n,]/)).map((s) => String(s).trim()).filter(Boolean);
@@ -29,7 +20,37 @@ const cleanList = (value) =>
 export function createApp({ store, scanner, notifier }) {
   const app = express();
   app.use(express.json({ limit: '200kb' }));
-  if (config.appUser && config.appPassword) app.use(basicAuth(config.appUser, config.appPassword));
+  app.use(authMiddleware());
+
+  const adminOnly = (req, res, next) => (req.user.admin ? next() : res.status(403).json({ error: 'רק למנהל' }));
+  // Admins see every search; other users only their own.
+  const canAccess = (req, search) => Boolean(search) && (req.user.admin || search.owner === req.user.name);
+  const telegramReady = () => config.notify.provider === 'telegram' && Boolean(config.notify.telegramBotToken);
+
+  app.get('/api/me', (req, res) => {
+    res.json({
+      name: req.user.name,
+      admin: req.user.admin,
+      telegram: { available: telegramReady(), connected: telegramReady() ? telegramChatsFor(store, req.user.admin ? null : req.user.name).length : 0 },
+    });
+  });
+
+  app.post('/api/telegram/link', async (req, res) => {
+    try {
+      res.json(await startLink(userKey(req.user)));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/telegram/link/:code/wait', async (req, res) => {
+    res.json(await waitForLink(store, req.params.code, { key: userKey(req.user) }));
+  });
+
+  app.delete('/api/telegram/chats', (req, res) => {
+    store.setSetting(chatsKey(userKey(req.user)), []);
+    res.json({ ok: true });
+  });
 
   app.get('/api/meta', (_req, res) => {
     res.json({
@@ -48,11 +69,12 @@ export function createApp({ store, scanner, notifier }) {
   });
 
   app.get('/api/listings', (req, res) => {
-    let listings = store.listListings({ sinceDays: config.keepDays });
+    const statuses = store.statusesFor(userKey(req.user));
+    let listings = store.listListings({ sinceDays: config.keepDays }).map((l) => ({ ...l, userStatus: statuses.get(l.id) ?? null }));
     let filters = null;
     if (req.query.searchId) {
       const search = store.getSearch(Number(req.query.searchId));
-      if (!search) return res.status(404).json({ error: 'search not found' });
+      if (!canAccess(req, search)) return res.status(404).json({ error: 'search not found' });
       const ids = store.matchedListingIds(search.id);
       listings = listings.filter((l) => ids.has(l.id));
       filters = search.filters;
@@ -81,21 +103,22 @@ export function createApp({ store, scanner, notifier }) {
   app.post('/api/listings/:id/status', (req, res) => {
     const status = req.body?.status ?? null;
     if (![null, 'favorite', 'hidden'].includes(status)) return res.status(400).json({ error: 'bad status' });
-    store.setUserStatus(req.params.id, status);
+    store.setUserStatus(userKey(req.user), req.params.id, status);
     res.json({ ok: true });
   });
 
-  app.get('/api/searches', (_req, res) => res.json(store.listSearches()));
+  app.get('/api/searches', (req, res) => res.json(store.listSearches().filter((s) => canAccess(req, s))));
 
   app.post('/api/searches', (req, res) => {
     const { name, filters, notify = true, active = true } = req.body ?? {};
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
-    const search = store.createSearch({ name: name.trim(), filters: normalizeFilters(filters), notify, active });
+    const search = store.createSearch({ name: name.trim(), filters: normalizeFilters(filters), notify, active, owner: req.user.name });
     scanner.backfill(search);
     res.status(201).json(store.getSearch(search.id));
   });
 
   app.put('/api/searches/:id', (req, res) => {
+    if (!canAccess(req, store.getSearch(Number(req.params.id)))) return res.status(404).json({ error: 'not found' });
     const { name, filters, notify, active } = req.body ?? {};
     const search = store.updateSearch(Number(req.params.id), {
       name: name?.trim() || undefined,
@@ -109,13 +132,16 @@ export function createApp({ store, scanner, notifier }) {
   });
 
   app.delete('/api/searches/:id', (req, res) => {
+    if (!canAccess(req, store.getSearch(Number(req.params.id)))) return res.status(404).json({ error: 'not found' });
     if (!store.deleteSearch(Number(req.params.id))) return res.status(404).json({ error: 'not found' });
     res.status(204).end();
   });
 
   app.post('/api/searches/:id/test', async (req, res) => {
     const search = store.getSearch(Number(req.params.id));
-    if (!search) return res.status(404).json({ error: 'not found' });
+    if (!canAccess(req, search)) return res.status(404).json({ error: 'not found' });
+    const recipients = telegramReady() ? telegramChatsFor(store, search.owner) : null;
+    if (recipients && !recipients.length) return res.status(400).json({ error: 'קודם צריך לחבר טלגרם (הכפתור "חבר את הטלגרם שלי" למעלה).' });
     if (!notifier.configured()) return res.status(400).json({ error: 'ההתראות לא מוגדרות (NOTIFY_PROVIDER). ראו README.' });
     const ids = store.matchedListingIds(search.id);
     const listing = store.listListings({ sinceDays: config.keepDays }).find((l) => ids.has(l.id));
@@ -125,16 +151,16 @@ export function createApp({ store, scanner, notifier }) {
       text = { ...message, text: `🧪 הודעת בדיקה\n${message.text}`, html: `🧪 <i>הודעת בדיקה</i>\n${message.html}` };
     }
     try {
-      await notifier.send(text);
+      await notifier.send(text, recipients ? { telegramChatIds: recipients } : undefined);
       res.json({ ok: true });
     } catch (err) {
       res.status(502).json({ error: err.message });
     }
   });
 
-  app.get('/api/settings/sources', (_req, res) => res.json(sourceSettings(store)));
+  app.get('/api/settings/sources', adminOnly, (_req, res) => res.json(sourceSettings(store)));
 
-  app.put('/api/settings/sources', (req, res) => {
+  app.put('/api/settings/sources', adminOnly, (req, res) => {
     const body = req.body ?? {};
     const current = sourceSettings(store);
     const next = {
@@ -161,9 +187,9 @@ export function createApp({ store, scanner, notifier }) {
     res.json(next);
   });
 
-  app.get('/api/scans', (_req, res) => res.json(store.recentRuns(40)));
+  app.get('/api/scans', adminOnly, (_req, res) => res.json(store.recentRuns(40)));
 
-  app.post('/api/scan', async (_req, res) => {
+  app.post('/api/scan', adminOnly, async (_req, res) => {
     try {
       res.json(await scanner.scan());
     } catch (err) {

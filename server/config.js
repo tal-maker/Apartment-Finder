@@ -11,8 +11,6 @@ const list = (value) => (value ?? '').split(',').map((s) => s.trim()).filter(Boo
 export const config = {
   port: int(env.PORT, 3000),
   dataDir: path.resolve(env.DATA_DIR || 'data'),
-  appUser: env.APP_USER || '',
-  appPassword: env.APP_PASSWORD || '',
   mockSources: env.MOCK_SOURCES === '1',
 
   scanIntervalMinutes: int(env.SCAN_INTERVAL_MINUTES, 5),

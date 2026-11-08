@@ -12,6 +12,7 @@ const UNKNOWN_LABELS = { ...FEATURE_LABELS, price: 'מחיר', rooms: 'חדרי�
 const STORAGE_KEY = 'apartment-finder:filters';
 
 let meta = null;
+let me = { name: null, admin: true, telegram: { available: false, connected: 0 } };
 let searches = [];
 
 // ---------- helpers
@@ -421,7 +422,7 @@ async function loadSearches() {
           (s) => `
       <div class="search-row ${s.active ? '' : 'inactive'}" data-id="${s.id}">
         <div class="search-main">
-          <h3>${esc(s.name)} <span class="badge">${s.matchCount} התאמות</span></h3>
+          <h3>${esc(s.name)} <span class="badge">${s.matchCount} התאמות</span>${me.admin && s.owner && s.owner !== me.name ? ` <span class="badge owner">של ${esc(s.owner)}</span>` : ''}</h3>
           <p class="muted">${esc(describeFilters(s.filters))}</p>
         </div>
         <div class="search-controls">
@@ -617,8 +618,70 @@ function renderSiteSources() {
     .join('');
 }
 
+// ---------- user & Telegram connection
+async function loadMe() {
+  me = await api('/api/me');
+  const who = $('#whoami');
+  who.hidden = !me.name;
+  who.textContent = me.name ? `👤 ${me.name}` : '';
+  // Sources, settings and scanning are the admin's.
+  $('[data-tab="sources"]').hidden = !me.admin;
+  $('#scan-now').hidden = !me.admin;
+  renderTelegramBox();
+}
+
+function renderTelegramBox(state = null) {
+  const box = $('#telegram-box');
+  box.hidden = !me.telegram.available;
+  if (box.hidden) return;
+  if (state?.waiting) {
+    box.innerHTML = `<div><strong>✈️ חיבור טלגרם</strong>
+      <p class="muted">בטלגרם שנפתח, לחצו <b>Start</b> (או "התחל"). אם הוא לא נפתח: <a href="${esc(state.url)}" target="_blank" rel="noopener">פתחו את הבוט</a>.</p></div>
+      <span class="muted">ממתין לאישור…</span>`;
+    return;
+  }
+  box.innerHTML = me.telegram.connected
+    ? `<div><strong>✈️ התראות בטלגרם: ✅ מחובר</strong>
+        <p class="muted">דירות חדשות שמתאימות לחיפושים שלך יישלחו אליך בטלגרם.</p></div>
+       <div class="row-actions"><button class="btn small" id="tg-connect">חבר עוד טלגרם</button>
+       <button class="btn small ghost danger" id="tg-disconnect">נתק</button></div>`
+    : `<div><strong>✈️ התראות בטלגרם: לא מחובר</strong>
+        <p class="muted">כדי לקבל הודעה על כל דירה חדשה שמתאימה לחיפושים שלך, חבר את הטלגרם שלך (לחיצה אחת).</p></div>
+       <button class="btn primary" id="tg-connect">חבר את הטלגרם שלי</button>`;
+}
+
+$('#telegram-box').addEventListener('click', async (e) => {
+  if (e.target.id === 'tg-disconnect' && confirm('לנתק את הטלגרם? לא יישלחו אליך התראות.')) {
+    await api('/api/telegram/chats', { method: 'DELETE' });
+    await loadMe();
+    return;
+  }
+  if (e.target.id !== 'tg-connect') return;
+  // Open the window right away, while the click still counts, then point it at the bot.
+  const win = window.open('', '_blank');
+  try {
+    const { code, url } = await api('/api/telegram/link', { method: 'POST' });
+    if (win) win.location = url;
+    renderTelegramBox({ waiting: true, url });
+    const deadline = Date.now() + 5 * 60 * 1000;
+    while (Date.now() < deadline) {
+      const result = await api(`/api/telegram/link/${code}/wait`, { method: 'POST' });
+      if (result.status === 'connected') {
+        toast('✅ הטלגרם מחובר');
+        break;
+      }
+      if (result.status === 'expired') break;
+    }
+  } catch (err) {
+    win?.close();
+    toast(err.message, true);
+  }
+  await loadMe();
+});
+
 // ---------- start
 if (matchMedia('(max-width: 900px)').matches) $('.filters-panel').classList.add('collapsed');
+await loadMe();
 await refreshMeta();
 renderSiteSources();
 renderFilterForm($('#listing-filters'), currentFilters);

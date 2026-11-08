@@ -94,3 +94,23 @@ test('a post stored under an old id is updated, not announced again', async () =
   assert.equal(sent.length, 0);
   assert.equal(store.getListing('telegram:old').url, 'https://group/posts/1/');
 });
+
+test("each user's alerts go to that user's Telegram only", async () => {
+  const { store, sent: _ } = setup({});
+  const sent = [];
+  const notifier = { configured: () => true, send: async (message, options) => sent.push({ message, to: options?.telegramChatIds }) };
+  const feeds = { yad2: [yad2Listing('a', 7000)] };
+  const recipients = { dani: ['222'], noa: [] };
+  const scanner = new Scanner({
+    store, notifier, log: quietLog, extract: null, recipientsFor: (owner) => (owner ? recipients[owner] : ['111']),
+    fetchers: { yad2: async () => feeds.yad2, telegram: async () => ({ posts: [], errors: [] }), facebook: async () => [] },
+  });
+  store.createSearch({ name: 'שלי', filters: { areas: ['old_north'] } });
+  store.createSearch({ name: 'של דני', filters: { areas: ['old_north'] }, owner: 'dani' });
+  store.createSearch({ name: 'של נועה', filters: { areas: ['old_north'] }, owner: 'noa' });
+  store.createSearch({ name: 'דני בדרום', filters: { areas: ['south'] }, owner: 'dani' });
+  await scanner.scan();
+  feeds.yad2 = [yad2Listing('a', 7000), yad2Listing('b', 7500)];
+  await scanner.scan();
+  assert.deepEqual(sent.map((s) => [s.to, s.message.text.match(/🔔 (.+)$/)[1]]), [[['111'], 'שלי'], [['222'], 'של דני']]);
+});
