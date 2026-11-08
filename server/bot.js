@@ -15,9 +15,10 @@ const FEATURES = [
   ['mamad', '🛡️ ממ״ד'], ['shelter', '☢️ מקלט'], ['parking', '🚗 חניה'], ['elevator', '🛗 מעלית'], ['balcony', '☀️ מרפסת'],
   ['aircon', '❄️ מזגן'], ['storage', '📦 מחסן'], ['furnished', '🛋️ מרוהטת'], ['pets', '🐾 חיות מחמד'],
 ];
+const CONDITIONS = [['new', '✨ חדשה'], ['renovated', '🔨 משופצת'], ['good', '👍 במצב שמור'], ['needs_renovation', '🧱 דורשת שיפוץ']];
 const KINDS = { rent: ['rent'], roommate: ['rent', 'roommate'], sublet: ['rent', 'sublet'], all: ['rent', 'roommate', 'sublet'] };
 const NEIGHBORHOODS = AREAS.flatMap((a) => a.neighborhoods.map((n) => ({ area: a.id, name: n.name })));
-const STEPS = 7;
+const STEPS = 8;
 
 const btn = (text, data) => ({ text, callback_data: data });
 const rows = (buttons, perRow) => buttons.reduce((acc, b, i) => (i % perRow ? acc[acc.length - 1].push(b) : acc.push([b]), acc), []);
@@ -32,6 +33,7 @@ export function describeFilters(f) {
   lines.push(`💰 מחיר: ${price}`);
   const rooms = f.roomsMin && f.roomsMax ? `${f.roomsMin}–${f.roomsMax}` : f.roomsMin ? `${f.roomsMin} ומעלה` : f.roomsMax ? `עד ${f.roomsMax}` : 'לא משנה';
   lines.push(`🛏 חדרים: ${rooms}`);
+  if (f.conditions.length) lines.push(`🏚️ מצב: ${CONDITIONS.filter(([k]) => f.conditions.includes(k)).map(([, label]) => label.split(' ').slice(1).join(' ')).join(' / ')}`);
   if (f.entryTo) lines.push(`📅 כניסה עד: ${f.entryTo.split('-').reverse().join('.')}`);
   const must = FEATURES.filter(([k]) => f.features[k] === 'required').map(([, label]) => label);
   if (must.length) lines.push(`🔑 חובה: ${must.join(' · ')}`);
@@ -100,21 +102,26 @@ export function createBot({ store, scanner, call = telegram, log = console, now 
             [btn('לא משנה', 'R:0')],
           ],
         ];
+      case 'condition':
+        return [
+          `<b>4/${STEPS} 🏚️ באיזה מצב הדירה?</b>\nאפשר לבחור כמה, או ✔️ המשך אם לא משנה.`,
+          [...rows(CONDITIONS.map(([k, label]) => btn(`${f.conditions.includes(k) ? '✅ ' : ''}${label}`, `c:${k}`)), 2), [btn('✔️ המשך', 'next')]],
+        ];
       case 'entry':
         return [
-          `<b>4/${STEPS} 📅 עד מתי צריך להיכנס?</b>`,
+          `<b>5/${STEPS} 📅 עד מתי צריך להיכנס?</b>`,
           [[btn('תוך חודש', 'e:31'), btn('תוך חודשיים', 'e:61')], [btn('תוך 3 חודשים', 'e:92'), btn('לא משנה', 'e:0')]],
         ];
       case 'features':
         return [
-          `<b>5/${STEPS} 🔑 מה חובה שיהיה בדירה?</b>\nאפשר לבחור כמה, או ✔️ המשך אם לא משנה.`,
+          `<b>6/${STEPS} 🔑 מה חובה שיהיה בדירה?</b>\nאפשר לבחור כמה, או ✔️ המשך אם לא משנה.`,
           [...rows(FEATURES.map(([k, label]) => btn(`${f.features[k] ? '✅ ' : ''}${label}`, `f:${k}`)), 3), [btn('✔️ המשך', 'next')]],
         ];
       case 'broker':
-        return [`<b>6/${STEPS} 🤝 גם דירות דרך תיווך?</b>`, [[btn('כן, לא משנה', 'b:any'), btn('רק בלי תיווך', 'b:no_broker')]]];
+        return [`<b>7/${STEPS} 🤝 גם דירות דרך תיווך?</b>`, [[btn('כן, לא משנה', 'b:any'), btn('רק בלי תיווך', 'b:no_broker')]]];
       case 'kinds':
         return [
-          `<b>7/${STEPS} 🏠 מה מחפשים?</b>`,
+          `<b>8/${STEPS} 🏠 מה מחפשים?</b>`,
           [[btn('דירה שלמה', 'k:rent'), btn('+ שותפים', 'k:roommate')], [btn('+ סאבלט', 'k:sublet'), btn('הכל', 'k:all')]],
         ];
       case 'confirm':
@@ -194,8 +201,13 @@ export function createBot({ store, scanner, call = telegram, log = console, now 
     }
     if (s.step === 'roomsMax' && kind === 'R') {
       f.roomsMax = Number(value) || null;
-      return go(chatId, s, 'entry');
+      return go(chatId, s, 'condition');
     }
+    if (s.step === 'condition' && kind === 'c') {
+      f.conditions = f.conditions.includes(value) ? f.conditions.filter((c) => c !== value) : [...f.conditions, value];
+      return refreshButtons(chatId, s);
+    }
+    if (s.step === 'condition' && kind === 'next') return go(chatId, s, 'entry');
     if (s.step === 'entry' && kind === 'e') {
       f.entryTo = Number(value) ? inDays(Number(value)) : null;
       return go(chatId, s, 'features');

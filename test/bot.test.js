@@ -31,7 +31,7 @@ test('a friend presses Start on the invite and builds a search by answering', as
   const { store, call, say, press, last } = setup();
   const { url } = await addPerson(store, 'דני', call);
   await say(`/start ${url.split('start=')[1]}`);
-  assert.match(last().text, /1\/7 📍 באילו אזורים/);
+  assert.match(last().text, /1\/8 📍 באילו אזורים/);
 
   await press('a:new_north');
   await press('a:old_north');
@@ -44,11 +44,18 @@ test('a friend presses Start on the invite and builds a search by answering', as
   const kikar = last().reply_markup.inline_keyboard.flat().find((b) => b.text === 'כיכר המדינה').callback_data;
   await press(kikar);
   await press('next');
-  assert.match(last().text, /2\/7 💰/);
+  assert.match(last().text, /2\/8 💰/);
   await say('7000-9500');
-  assert.match(last().text, /3\/7 🛏/);
+  assert.match(last().text, /3\/8 🛏/);
   await press('r:2.5');
   await press('R:4');
+  assert.match(last().text, /4\/8 🏚️ באיזה מצב/);
+  await press('c:new');
+  await press('c:renovated');
+  await press('c:good');
+  await press('c:good'); // toggled off again
+  await press('next');
+  assert.match(last().text, /5\/8 📅/);
   await press('e:61');
   await press('f:mamad');
   await press('f:elevator');
@@ -58,6 +65,7 @@ test('a friend presses Start on the invite and builds a search by answering', as
   assert.match(last().text, /סיכום החיפוש/);
   assert.match(last().text, /📍 איפה: כיכר המדינה/);
   assert.match(last().text, /💰 מחיר: 7,000–9,500 ₪/);
+  assert.match(last().text, /🏚️ מצב: חדשה \/ משופצת/);
   await press('save');
   assert.match(last().text, /החיפוש פעיל/);
 
@@ -66,6 +74,7 @@ test('a friend presses Start on the invite and builds a search by answering', as
   assert.deepEqual(search.filters.neighborhoods, ['כיכר המדינה']);
   assert.deepEqual(search.filters.areas, []);
   assert.deepEqual([search.filters.priceMin, search.filters.priceMax, search.filters.roomsMin, search.filters.roomsMax], [7000, 9500, 2.5, 4]);
+  assert.deepEqual(search.filters.conditions, ['new', 'renovated']);
   assert.equal(search.filters.entryTo, '2027-01-10');
   assert.deepEqual(search.filters.features, { mamad: 'required', elevator: 'required' });
   assert.equal(search.filters.broker, 'no_broker');
