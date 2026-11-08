@@ -64,7 +64,9 @@ function renderFilterForm(root, filters = {}) {
           <div class="area">
             <label class="area-label"><input type="checkbox" name="areas" value="${area.id}" ${checked(f.areas, area.id)}> ${esc(area.name)}</label>
             <details class="hoods"><summary>שכונות</summary>
-              ${area.neighborhoods.map((n) => `<label><input type="checkbox" name="neighborhoods" value="${esc(n.name)}" ${checked(f.neighborhoods, n.name)}> ${esc(n.name)}</label>`).join('')}
+              <div class="hoods-list">
+                ${area.neighborhoods.map((n) => `<label><input type="checkbox" name="neighborhoods" value="${esc(n.name)}" ${checked(f.neighborhoods, n.name)}> ${esc(n.name)}</label>`).join('')}
+              </div>
             </details>
           </div>`,
           )
