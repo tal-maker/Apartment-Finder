@@ -75,6 +75,7 @@
       </div>
       <p class="muted">כל חיפוש פעיל נבדק בכל סריקה (כל <span class="interval"></span> דקות). דירה חדשה שמתאימה לו תישלח אליכם בהודעה (טלגרם או וואטסאפ).</p>
       <div id="telegram-box" class="tg-box" hidden></div>
+      <div id="people-box" class="people-box" hidden></div>
       <div id="searches"></div>
     </section>
 
@@ -124,6 +125,9 @@
         <label><input type="checkbox" name="notify" checked> שלח התראות</label>
         <label><input type="checkbox" name="active" checked> פעיל</label>
       </div>
+      <label class="block" id="send-to-row" hidden>שלח את ההתראות אל
+        <select name="sendTo"></select>
+      </label>
       <div id="search-dialog-filters" class="filter-form"></div>
       <div class="dialog-actions">
         <button value="cancel" class="btn ghost" formnovalidate>ביטול</button>

@@ -66,6 +66,7 @@ export const config = {
     // telegram | callmebot | twilio | meta | console. WHATSAPP_PROVIDER is the older name.
     provider: (env.NOTIFY_PROVIDER || env.WHATSAPP_PROVIDER || '').toLowerCase(),
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || '',
+    telegramApi: env.TELEGRAM_API_URL || 'https://api.telegram.org',
     telegramChatIds: list(env.TELEGRAM_ALERT_CHAT_IDS),
     callmebotRecipients: list(env.CALLMEBOT_RECIPIENTS), // "972501234567:apikey"
     twilioSid: env.TWILIO_ACCOUNT_SID || '',

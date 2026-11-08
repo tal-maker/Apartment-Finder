@@ -224,16 +224,17 @@ export class Store {
     return this.getSearch(Number(result.lastInsertRowid));
   }
 
-  updateSearch(id, { name, filters, notify, active }) {
+  updateSearch(id, { name, filters, notify, active, owner }) {
     const current = this.getSearch(id);
     if (!current) return null;
     this.db
-      .prepare('UPDATE searches SET name = ?, filters = ?, notify = ?, active = ? WHERE id = ?')
+      .prepare('UPDATE searches SET name = ?, filters = ?, notify = ?, active = ?, owner = ? WHERE id = ?')
       .run(
         name ?? current.name,
         JSON.stringify(filters ?? current.filters),
         (notify ?? current.notify) ? 1 : 0,
         (active ?? current.active) ? 1 : 0,
+        owner === undefined ? current.owner : owner,
         id,
       );
     if (filters) this.db.prepare('DELETE FROM matches WHERE search_id = ? AND notified_at IS NULL').run(id);

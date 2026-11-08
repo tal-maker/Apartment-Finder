@@ -10,7 +10,7 @@ import { SITES } from './sources/sites.js';
 import { mtprotoConfigured } from './sources/telegram.js';
 import { facebookConfigured } from './sources/facebook.js';
 import { authMiddleware, telegramChatsFor, userKey } from './users.js';
-import { chatsKey, startLink, waitForLink } from './notify/telegram-link.js';
+import { addPerson, chatsKey, listPeople, personKey, removePerson, startLink, telegramReady, waitForLink } from './notify/telegram-link.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +25,6 @@ export function createApp({ store, scanner, notifier }) {
   const adminOnly = (req, res, next) => (req.user.admin ? next() : res.status(403).json({ error: 'רק למנהל' }));
   // Admins see every search; other users only their own.
   const canAccess = (req, search) => Boolean(search) && (req.user.admin || search.owner === req.user.name);
-  const telegramReady = () => config.notify.provider === 'telegram' && Boolean(config.notify.telegramBotToken);
 
   app.get('/api/me', (req, res) => {
     res.json({
@@ -37,7 +36,7 @@ export function createApp({ store, scanner, notifier }) {
 
   app.post('/api/telegram/link', async (req, res) => {
     try {
-      res.json(await startLink(userKey(req.user)));
+      res.json(await startLink(store, userKey(req.user)));
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -45,6 +44,31 @@ export function createApp({ store, scanner, notifier }) {
 
   app.post('/api/telegram/link/:code/wait', async (req, res) => {
     res.json(await waitForLink(store, req.params.code, { key: userKey(req.user) }));
+  });
+
+  // People the admin sends a search's alerts to, without a login of their own.
+  app.get('/api/people', adminOnly, async (_req, res) => {
+    try {
+      res.json(await listPeople(store));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/people', adminOnly, async (req, res) => {
+    try {
+      res.status(201).json(await addPerson(store, req.body?.name));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/people/:name', adminOnly, (req, res) => {
+    removePerson(store, req.params.name);
+    for (const search of store.listSearches()) {
+      if (search.owner === personKey(req.params.name)) store.updateSearch(search.id, { owner: null });
+    }
+    res.status(204).end();
   });
 
   app.delete('/api/telegram/chats', (req, res) => {
@@ -110,17 +134,20 @@ export function createApp({ store, scanner, notifier }) {
   app.get('/api/searches', (req, res) => res.json(store.listSearches().filter((s) => canAccess(req, s))));
 
   app.post('/api/searches', (req, res) => {
-    const { name, filters, notify = true, active = true } = req.body ?? {};
+    const { name, filters, notify = true, active = true, sendTo } = req.body ?? {};
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
-    const search = store.createSearch({ name: name.trim(), filters: normalizeFilters(filters), notify, active, owner: req.user.name });
+    const owner = req.user.admin && sendTo ? personKey(sendTo) : req.user.name;
+    const search = store.createSearch({ name: name.trim(), filters: normalizeFilters(filters), notify, active, owner });
     scanner.backfill(search);
     res.status(201).json(store.getSearch(search.id));
   });
 
   app.put('/api/searches/:id', (req, res) => {
     if (!canAccess(req, store.getSearch(Number(req.params.id)))) return res.status(404).json({ error: 'not found' });
-    const { name, filters, notify, active } = req.body ?? {};
+    const { name, filters, notify, active, sendTo } = req.body ?? {};
     const search = store.updateSearch(Number(req.params.id), {
+      // The admin chooses who gets a search's alerts: "" = themselves, or a person.
+      owner: req.user.admin && sendTo !== undefined ? (sendTo ? personKey(sendTo) : req.user.name) : undefined,
       name: name?.trim() || undefined,
       filters: filters ? normalizeFilters(filters) : undefined,
       notify,

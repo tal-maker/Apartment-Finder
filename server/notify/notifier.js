@@ -132,7 +132,7 @@ export function toMessage(message) {
 }
 
 export async function telegram(method, body) {
-  const res = await fetch(`https://api.telegram.org/bot${config.notify.telegramBotToken}/${method}`, {
+  const res = await fetch(`${config.notify.telegramApi}/bot${config.notify.telegramBotToken}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

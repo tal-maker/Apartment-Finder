@@ -13,6 +13,8 @@ const STORAGE_KEY = 'apartment-finder:filters';
 
 let meta = null;
 let me = { name: null, admin: true, telegram: { available: false, connected: 0 } };
+let people = [];
+const personOf = (owner) => (owner?.startsWith('person:') ? owner.slice(7) : null);
 let searches = [];
 
 // ---------- helpers
@@ -422,7 +424,7 @@ async function loadSearches() {
           (s) => `
       <div class="search-row ${s.active ? '' : 'inactive'}" data-id="${s.id}">
         <div class="search-main">
-          <h3>${esc(s.name)} <span class="badge">${s.matchCount} התאמות</span>${me.admin && s.owner && s.owner !== me.name ? ` <span class="badge owner">של ${esc(s.owner)}</span>` : ''}</h3>
+          <h3>${esc(s.name)} <span class="badge">${s.matchCount} התאמות</span>${me.admin && personOf(s.owner) ? ` <span class="badge owner">✈️ נשלח ל${esc(personOf(s.owner))}</span>` : me.admin && s.owner && s.owner !== me.name ? ` <span class="badge owner">של ${esc(s.owner)}</span>` : ''}</h3>
           <p class="muted">${esc(describeFilters(s.filters))}</p>
         </div>
         <div class="search-controls">
@@ -480,6 +482,13 @@ function openSearchDialog(search, filters) {
   form.name.value = search?.name ?? '';
   form.notify.checked = search?.notify ?? true;
   form.active.checked = search?.active ?? true;
+  // The admin picks who gets this search's alerts: themselves or a person from the list.
+  const showSendTo = me.admin && me.telegram.available && people.length > 0;
+  $('#send-to-row').hidden = !showSendTo;
+  form.sendTo.innerHTML = `<option value="">אליי</option>${people
+    .map((p) => `<option value="${esc(p.name)}">${esc(p.name)}${p.connected ? '' : ' (עוד לא לחץ Start)'}</option>`)
+    .join('')}`;
+  form.sendTo.value = personOf(search?.owner) ?? '';
   renderFilterForm($('#search-dialog-filters'), search?.filters ?? filters ?? {});
   $('#search-dialog').showModal();
 }
@@ -488,6 +497,7 @@ $('#search-dialog').addEventListener('close', async () => {
   if ($('#search-dialog').returnValue !== 'save') return;
   const form = $('#search-dialog-form');
   const body = { name: form.name.value, notify: form.notify.checked, active: form.active.checked, filters: readFilterForm($('#search-dialog-filters')) };
+  if (!$('#send-to-row').hidden) body.sendTo = form.sendTo.value;
   try {
     if (editingId) await api(`/api/searches/${editingId}`, { method: 'PUT', body });
     else await api('/api/searches', { method: 'POST', body });
@@ -595,6 +605,7 @@ $('#scan-now').addEventListener('click', async () => {
 function showTab(name) {
   $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
   $$('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${name}`));
+  if (name === 'searches') loadPeople();
   if (name === 'sources') {
     loadSources();
     loadRuns();
@@ -679,9 +690,63 @@ $('#telegram-box').addEventListener('click', async (e) => {
   await loadMe();
 });
 
+// ---------- people who get alerts without a login (admin)
+async function loadPeople() {
+  const box = $('#people-box');
+  box.hidden = !(me.admin && me.telegram.available);
+  if (box.hidden) return;
+  people = await api('/api/people').catch(() => []);
+  const share = (p) =>
+    `https://wa.me/?text=${encodeURIComponent(`היי ${p.name}! כדי לקבל התראות על דירות להשכרה בטלגרם, פתח את הקישור ולחץ Start:\n${p.url}`)}`;
+  box.innerHTML = `
+    <div class="people-head">
+      <div><strong>👥 מי עוד מקבל התראות</strong>
+        <p class="muted">הוסיפו חבר, שלחו לו את הקישור, והוא לוחץ Start בבוט (פעם אחת). אחר כך צרו חיפוש ובחרו "שלח את ההתראות אל" – השם שלו.</p></div>
+      <form id="add-person" class="row-actions"><input name="name" placeholder="שם, למשל דני" maxlength="40" required><button class="btn primary small">הוסף</button></form>
+    </div>
+    ${people
+      .map(
+        (p) => `<div class="person" data-name="${esc(p.name)}">
+          <span><strong>${esc(p.name)}</strong> · ${p.connected ? '✅ מחובר' : '⏳ ממתין שילחץ Start'}</span>
+          <span class="row-actions">
+            ${p.url ? `<a class="btn small" href="${esc(share(p))}" target="_blank" rel="noopener">שלח בוואטסאפ</a>
+            <button class="btn small ghost" data-copy="${esc(p.url)}">העתק קישור</button>` : ''}
+            <button class="btn small ghost danger" data-remove>הסר</button>
+          </span>
+        </div>`,
+      )
+      .join('')}`;
+}
+
+$('#people-box').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/api/people', { method: 'POST', body: { name: e.target.name.value } });
+    await loadPeople();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+$('#people-box').addEventListener('click', async (e) => {
+  const copy = e.target.closest('[data-copy]');
+  if (copy) {
+    await navigator.clipboard?.writeText(copy.dataset.copy).catch(() => {});
+    toast('הקישור הועתק');
+    return;
+  }
+  if (e.target.closest('[data-remove]')) {
+    const name = e.target.closest('.person').dataset.name;
+    if (!confirm(`להסיר את ${name}? החיפושים שנשלחו אליו יחזרו להישלח אליך.`)) return;
+    await api(`/api/people/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    await Promise.all([loadPeople(), loadSearches()]);
+  }
+});
+
 // ---------- start
 if (matchMedia('(max-width: 900px)').matches) $('.filters-panel').classList.add('collapsed');
 await loadMe();
+await loadPeople();
 await refreshMeta();
 renderSiteSources();
 renderFilterForm($('#listing-filters'), currentFilters);

@@ -24,7 +24,9 @@ export function parseUsers(env = process.env) {
 
 export const users = parseUsers();
 
-export const isAdmin = (name) => !users.length || name == null || Boolean(users.find((u) => u.name === name)?.admin);
+// A search owner: null (created without login) or an admin user means the admin;
+// anything else is a regular user or a person the admin sends alerts to ("person:<name>").
+export const isAdmin = (name) => name == null || Boolean(users.find((u) => u.name === name)?.admin);
 
 // Admins share favorites, hidden listings and Telegram recipients; everyone else
 // has their own.
